@@ -27,8 +27,7 @@ class PoseFrame(BaseModel):
 
 
 class PredictionResponse(BaseModel):
-    """Model prediction response with exercise label, confidence, and rep count."""
+    """Model prediction response with exercise label and confidence."""
 
     exercise: str
     confidence: float
-    reps: int

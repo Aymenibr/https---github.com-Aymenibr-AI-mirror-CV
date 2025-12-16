@@ -29,15 +29,9 @@ app.add_middleware(
 # Initialize a sequence buffer for streaming pose frames.
 @app.on_event("startup")
 def _init_buffer() -> None:
-    # Typical training window size; adjust if model expects different length.
-    sequence_length = (
-        inference._EXPECTED_SHAPE[1] if inference._EXPECTED_SHAPE else 30
-    )
-    app.state.sequence_buffer = SequenceBuffer(sequence_length=sequence_length)
-    logger.info(
-        "sequence_buffer_initialized",
-        extra={"sequence_length": sequence_length},
-    )
+    total_feature_length = inference.get_scaler_feature_count()
+    app.state.sequence_buffer = SequenceBuffer(total_feature_length=total_feature_length)
+    logger.info("sequence_buffer_initialized", extra={"total_feature_length": total_feature_length})
 
 
 @app.get("/health")
@@ -62,9 +56,16 @@ def predict(request: schemas.PoseFrame) -> schemas.PredictionResponse:
         logger.warning("invalid_landmarks_frame", extra={"reason": "all_missing"})
         raise HTTPException(status_code=422, detail="Invalid or missing landmarks")
 
-    window = buffer.append(features)
+    try:
+        window = buffer.append(features)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     if window is None:
-        return schemas.PredictionResponse(exercise="", confidence=0.0, reps=0)
+        missing = buffer.frames_needed()
+        raise HTTPException(
+            status_code=425, detail=f"Insufficient frames for prediction; need {missing} more"
+        )
 
     start = time.perf_counter()
     result = inference.predict_sequence(window)
@@ -78,9 +79,7 @@ def predict(request: schemas.PoseFrame) -> schemas.PredictionResponse:
         },
     )
     return schemas.PredictionResponse(
-        exercise=result.get("label", ""),
-        confidence=float(result.get("confidence", 0.0)),
-        reps=0,
+        exercise=result.get("label", ""), confidence=float(result.get("confidence", 0.0))
     )
 
 
@@ -91,8 +90,8 @@ async def predict_ws(websocket: WebSocket) -> None:
     # Each WebSocket connection must maintain its own buffer to avoid sharing
     # mutable state across clients, which could mix pose frames and corrupt
     # predictions.
-    sequence_length = inference._EXPECTED_SHAPE[1] if inference._EXPECTED_SHAPE else 30
-    buffer: SequenceBuffer = SequenceBuffer(sequence_length=sequence_length)
+    total_feature_length = inference.get_scaler_feature_count()
+    buffer: SequenceBuffer = SequenceBuffer(total_feature_length=total_feature_length)
 
     try:
         while True:
@@ -103,7 +102,7 @@ async def predict_ws(websocket: WebSocket) -> None:
             # Basic payload validation before Pydantic to send structured errors.
             if keypoints is None or timestamp is None:
                 await websocket.send_json(
-                    {"error": "missing_fields", "exercise": "", "confidence": 0.0, "reps": 0}
+                    {"error": "missing_fields", "exercise": "", "confidence": 0.0}
                 )
                 continue
 
@@ -112,7 +111,7 @@ async def predict_ws(websocket: WebSocket) -> None:
             except Exception as exc:
                 logger.warning("ws_invalid_payload", extra={"error": str(exc)})
                 await websocket.send_json(
-                    {"error": "invalid_payload", "exercise": "", "confidence": 0.0, "reps": 0}
+                    {"error": "invalid_payload", "exercise": "", "confidence": 0.0}
                 )
                 continue
 
@@ -121,13 +120,13 @@ async def predict_ws(websocket: WebSocket) -> None:
             except Exception as exc:
                 logger.error("ws_feature_extraction_error", extra={"error": str(exc)})
                 await websocket.send_json(
-                    {"error": "feature_extraction_failed", "exercise": "", "confidence": 0.0, "reps": 0}
+                    {"error": "feature_extraction_failed", "exercise": "", "confidence": 0.0}
                 )
                 continue
 
             if np.all(features == -1.0):
                 await websocket.send_json(
-                    {"error": "invalid_landmarks", "exercise": "", "confidence": 0.0, "reps": 0}
+                    {"error": "invalid_landmarks", "exercise": "", "confidence": 0.0}
                 )
                 continue
 
@@ -135,13 +134,27 @@ async def predict_ws(websocket: WebSocket) -> None:
             if invalid_count > len(features) // 2:
                 # Ignore frames with too many invalid landmarks but keep connection alive.
                 await websocket.send_json(
-                    {"error": "too_many_missing_landmarks", "exercise": "", "confidence": 0.0, "reps": 0}
+                    {"error": "too_many_missing_landmarks", "exercise": "", "confidence": 0.0}
                 )
                 continue
 
-            window = buffer.append(features)
+            try:
+                window = buffer.append(features)
+            except ValueError as exc:
+                await websocket.send_json(
+                    {"error": str(exc), "exercise": "", "confidence": 0.0}
+                )
+                continue
+
             if window is None:
-                await websocket.send_json({"exercise": "", "confidence": 0.0, "reps": 0})
+                await websocket.send_json(
+                    {
+                        "error": "buffer_not_full",
+                        "exercise": "",
+                        "confidence": 0.0,
+                        "frames_needed": buffer.frames_needed(),
+                    }
+                )
                 continue
 
             result = inference.predict_sequence(window)
@@ -149,7 +162,6 @@ async def predict_ws(websocket: WebSocket) -> None:
                 {
                     "exercise": result.get("label", ""),
                     "confidence": float(result.get("confidence", 0.0)),
-                    "reps": 0,
                 }
             )
     except WebSocketDisconnect:

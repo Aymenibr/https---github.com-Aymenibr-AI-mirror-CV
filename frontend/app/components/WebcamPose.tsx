@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 type Props = {
   onFrameCaptured?: (imageData: ImageData) => void;
   onLandmarks?: (keypoints: number[][]) => void;
+  exercise?: string;
+  targetReps?: number | null;
 };
 
 type PoseLandmark = { x: number; y: number; z: number };
@@ -43,7 +45,7 @@ declare global {
   }
 }
 
-export default function WebcamPose({ onFrameCaptured, onLandmarks }: Props) {
+export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, targetReps }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -61,6 +63,7 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks }: Props) {
     confidence: 0,
   });
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
+  const [showCompletion, setShowCompletion] = useState<boolean>(false);
   const [useRestFallback, setUseRestFallback] = useState<boolean>(false);
   const wsFailureCountRef = useRef<number>(0);
   const restInFlightRef = useRef<boolean>(false);
@@ -71,6 +74,29 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks }: Props) {
   const restUrl = `${backendBase.replace(/\/$/, "")}/predict`;
   const lastSentKeypointsRef = useRef<number[][] | null>(null);
   const motionThreshold = 0.003;
+  const prevExerciseRef = useRef<string | undefined>(exercise);
+  const displayExercise = exercise || prediction.exercise;
+  const displayRepsText = targetReps && targetReps > 0 ? `${repCount} / ${targetReps}` : `${repCount}`;
+  const progressPercent =
+    targetReps && targetReps > 0 ? Math.min(100, Math.max(0, (repCount / targetReps) * 100)) : null;
+
+  useEffect(() => {
+    if (targetReps && targetReps > 0 && repCount >= targetReps) {
+      setShowCompletion(true);
+    }
+  }, [repCount, targetReps]);
+
+  useEffect(() => {
+    if (exercise !== prevExerciseRef.current) {
+      repCountRef.current = 0;
+      setRepCount(0);
+      repStageRef.current = null;
+      lastSentKeypointsRef.current = null;
+      setPrediction({ exercise: "", confidence: 0 });
+      setShowCompletion(false);
+      prevExerciseRef.current = exercise;
+    }
+  }, [exercise]);
 
   const formatLandmarks = (poseLandmarks: PoseLandmark[] | undefined): number[][] | null => {
     if (!poseLandmarks || poseLandmarks.length !== 33) {
@@ -115,15 +141,12 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks }: Props) {
   };
 
   const applyPredictionUpdate = (data: any) => {
-    setPrediction((prev) => {
-      const exercise =
-        typeof data.exercise === "string" && data.exercise.trim().length > 0 ? data.exercise : prev.exercise;
-      const confidence =
-        typeof data.confidence === "number" && Number.isFinite(data.confidence) && data.confidence > 0
-          ? data.confidence
-          : prev.confidence;
-      return { exercise, confidence };
-    });
+    const rawExercise = typeof data.exercise === "string" ? data.exercise.trim() : "";
+    const exercise = rawExercise.length > 0 ? rawExercise : "";
+    const confidence =
+      typeof data.confidence === "number" && Number.isFinite(data.confidence) ? data.confidence : 0;
+
+    setPrediction({ exercise, confidence: exercise ? confidence : 0 });
     const repsValue =
       typeof data.rep_count === "number" && Number.isFinite(data.rep_count)
         ? data.rep_count
@@ -466,10 +489,78 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks }: Props) {
               inset: 0,
               pointerEvents: "none",
               width: "100%",
-              height: "100%",
-              transform: "scaleX(-1)",
+            height: "100%",
+            transform: "scaleX(-1)",
+          }}
+        />
+        {showCompletion ? (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(0, 0, 0, 0.5)",
+              zIndex: 3,
+              padding: 16,
             }}
-          />
+          >
+            <div
+              style={{
+                width: "100%",
+                maxWidth: 320,
+                background: "#0b1224",
+                color: "#e2e8f0",
+                borderRadius: 16,
+                padding: "16px 18px",
+                boxShadow: "0 16px 40px rgba(0, 0, 0, 0.4)",
+                textAlign: "center",
+              }}
+            >
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "6px 12px",
+                  borderRadius: 999,
+                  background: "rgba(34, 197, 94, 0.15)",
+                  color: "#22c55e",
+                  fontWeight: 700,
+                  fontSize: 12,
+                  letterSpacing: 0.5,
+                }}
+              >
+                Completed
+              </div>
+              <h2 style={{ margin: "10px 0 6px", fontSize: 20, fontWeight: 800 }}>
+                Great job! You hit your target.
+              </h2>
+              <p style={{ margin: 0, fontSize: 14, color: "#cbd5e1" }}>
+                {displayExercise || "Exercise"} · {repCount} / {targetReps}
+              </p>
+              <button
+                type="button"
+                onClick={() => window.history.back()}
+                style={{
+                  marginTop: 12,
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: 12,
+                  border: "1px solid #334155",
+                  background: "#111827",
+                  color: "#e2e8f0",
+                  fontWeight: 700,
+                  fontSize: 14,
+                  cursor: "pointer",
+                }}
+              >
+                Go Back
+              </button>
+            </div>
+          </div>
+        ) : null}
           <div
             style={{
               position: "absolute",
@@ -487,8 +578,36 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks }: Props) {
               textAlign: "center",
             }}
           >
-            {`REPS: ${repCount}`}
+            {`REPS: ${displayRepsText}`}
           </div>
+          {progressPercent !== null ? (
+            <div
+              style={{
+                position: "absolute",
+                bottom: 0,
+                left: "50%",
+                transform: "translateX(-50%)",
+                width: "90%",
+                maxWidth: 320,
+                background: "rgba(255, 255, 255, 0.28)",
+                border: "1px solid rgba(255, 255, 255, 0.35)",
+                borderRadius: 999,
+                overflow: "hidden",
+                height: 12,
+                zIndex: 2,
+                backdropFilter: "blur(2px)",
+              }}
+            >
+              <div
+                style={{
+                  height: "100%",
+                  width: `${progressPercent}%`,
+                  background: "linear-gradient(90deg, #22c55e, #16a34a)",
+                  transition: "width 220ms ease",
+                }}
+              />
+            </div>
+          ) : null}
           <div
             style={{
               position: "absolute",
@@ -496,22 +615,27 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks }: Props) {
               right: 10,
               background: "rgba(0, 0, 0, 0.55)",
               color: "#fff",
-              padding: "6px 12px",
-              borderRadius: 10,
-              fontSize: 14,
+              padding: "8px 12px",
+              borderRadius: 12,
+              fontSize: 13,
               fontWeight: 600,
-              letterSpacing: 0.5,
+              letterSpacing: 0.4,
+              display: "grid",
+              gap: 4,
             }}
           >
-            {prediction.exercise && prediction.confidence > 0
-              ? `${Math.round(prediction.confidence * 100)}%`
-              : "Analyzing…"}
+            <span style={{ display: "block", fontSize: 12, opacity: 0.8 }}>
+              {displayExercise || "Exercise"}
+            </span>
+            <span>
+              {prediction.confidence > 0 ? `${Math.round(prediction.confidence * 100)}%` : "Analyzing"}
+            </span>
           </div>
         </div>
       )}
       <canvas ref={canvasRef} style={{ display: "none" }} />
       <div style={{ marginTop: 8, fontSize: 12, color: "#888", textAlign: "center" }}>
-        {latencyMs !== null ? `Latency: ${Math.round(latencyMs)} ms` : "Latency: --"} •{" "}
+        {latencyMs !== null ? `Latency: ${Math.round(latencyMs)} ms` : "Latency: --"}{" "}
         {useRestFallback ? (
           <>
             Degraded mode: using REST fallback.

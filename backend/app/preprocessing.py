@@ -70,14 +70,30 @@ class SequenceBuffer:
     """
     Fixed-length sliding window for sequential model inputs.
 
-    Maintains FIFO ordering and only returns a stacked numpy array when the
-    buffer is full, leaving earlier appends unaffected (unit-test friendly).
+    The window length is inferred from the scaler's flattened feature length to
+    guarantee parity with the training pipeline. The buffer only emits a stacked
+    array when full to avoid partial sequences reaching the model.
     """
 
-    def __init__(self, sequence_length: int) -> None:
-        self.sequence_length = sequence_length
-        self._buffer: Deque[np.ndarray] = deque(maxlen=sequence_length)
+    def __init__(self, total_feature_length: int) -> None:
+        if total_feature_length <= 0:
+            raise ValueError("total_feature_length must be positive")
+        self.total_feature_length = total_feature_length
+        self.sequence_length: Optional[int] = None
+        self._buffer: Deque[np.ndarray] = deque()
         self._feature_dim: Optional[int] = None
+
+    def _init_dimensions(self, vector: np.ndarray) -> None:
+        self._feature_dim = vector.shape[0]
+        if self._feature_dim <= 0:
+            raise ValueError("feature_vector must have positive length")
+        if self.total_feature_length % self._feature_dim != 0:
+            raise ValueError(
+                f"Scaler expects {self.total_feature_length} features, "
+                f"but frame length {self._feature_dim} does not divide evenly"
+            )
+        self.sequence_length = self.total_feature_length // self._feature_dim
+        self._buffer = deque(maxlen=self.sequence_length)
 
     def append(self, feature_vector: Iterable[float]) -> Optional[np.ndarray]:
         """
@@ -87,16 +103,27 @@ class SequenceBuffer:
             np.ndarray with shape (1, sequence_length, feature_dim) when the
             buffer becomes full; otherwise returns None.
         """
-        vector = np.asarray(feature_vector, dtype=float)
+        vector = np.asarray(feature_vector, dtype=float).reshape(-1)
         if self._feature_dim is None:
-            self._feature_dim = vector.shape[0]
+            self._init_dimensions(vector)
+        elif vector.shape[0] != self._feature_dim:
+            raise ValueError(
+                f"Inconsistent feature length. Expected {self._feature_dim}, got {vector.shape[0]}"
+            )
+
         self._buffer.append(vector)
 
-        if len(self._buffer) < self.sequence_length:
+        if self.sequence_length is None or len(self._buffer) < self.sequence_length:
             return None
 
         stacked = np.stack(list(self._buffer), axis=0)
         return stacked.reshape(1, self.sequence_length, self._feature_dim)
+
+    def frames_needed(self) -> Optional[int]:
+        """Return how many more frames are required before emitting a window."""
+        if self.sequence_length is None:
+            return None
+        return self.sequence_length - len(self._buffer)
 
 
 def extract_features_from_keypoints(landmarks: List[List[float]]) -> np.ndarray:
