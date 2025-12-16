@@ -69,9 +69,17 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
   const restInFlightRef = useRef<boolean>(false);
   const lastSendRef = useRef<number>(0);
   const sendIntervalMs = 100;
-  const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
-  const wsUrl = `${backendBase.replace(/^http/, "ws").replace(/\/$/, "")}/ws/predict`;
-  const restUrl = `${backendBase.replace(/\/$/, "")}/predict`;
+  const backendBase = (() => {
+    const url = process.env.NEXT_PUBLIC_API_URL;
+    if (!url) {
+      throw new Error("NEXT_PUBLIC_API_URL is not defined");
+    }
+    return url;
+  })();
+
+  const normalizedBase = backendBase.replace(/\/$/, "");
+  const wsUrl = `${normalizedBase.replace(/^http:\/\//, "ws://").replace(/^https:\/\//, "wss://")}/ws/predict`;
+  const restUrl = `${normalizedBase}/predict`;
   const lastSentKeypointsRef = useRef<number[][] | null>(null);
   const motionThreshold = 0.003;
   const prevExerciseRef = useRef<string | undefined>(exercise);
