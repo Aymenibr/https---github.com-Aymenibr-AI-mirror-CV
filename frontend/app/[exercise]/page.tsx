@@ -30,8 +30,9 @@ export default function ExercisePage() {
         background: "#0f172a",
       }}
     >
-      <Link
-        href="/"
+      <button
+        type="button"
+        onClick={() => window.history.back()}
         style={{
           position: "fixed",
           top: 14,
@@ -41,10 +42,14 @@ export default function ExercisePage() {
           fontSize: 13,
           textDecoration: "underline",
           textShadow: "0 2px 8px rgba(0, 0, 0, 0.6)",
+          background: "transparent",
+          border: "none",
+          padding: 0,
+          cursor: "pointer",
         }}
       >
         Back
-      </Link>
+      </button>
       <Script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" strategy="beforeInteractive" />
       <Script
         src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"

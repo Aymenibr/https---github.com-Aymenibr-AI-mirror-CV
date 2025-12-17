@@ -555,6 +555,48 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
               >
                 Completed
               </div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  gap: 6,
+                  marginTop: 8,
+                }}
+              >
+                {[0, 1, 2, 3, 4].map((idx) => (
+                  <span
+                    key={idx}
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      background: "#22c55e",
+                      boxShadow: "0 0 10px rgba(34, 197, 94, 0.6)",
+                      animation: "pulseDot 1.2s ease-in-out infinite",
+                      animationDelay: `${idx * 0.12}s`,
+                    }}
+                  />
+                ))}
+              </div>
+              <div
+                style={{
+                  marginTop: 10,
+                  height: 6,
+                  width: "100%",
+                  borderRadius: 999,
+                  background: "rgba(34, 197, 94, 0.15)",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    height: "100%",
+                    width: "35%",
+                    background: "linear-gradient(90deg, transparent, #22c55e, transparent)",
+                    animation: "slideGlow 1.6s ease-in-out infinite",
+                  }}
+                />
+              </div>
               <h2 style={{ margin: "10px 0 6px", fontSize: 20, fontWeight: 800 }}>
                 Great job! You hit your target.
               </h2>
@@ -563,7 +605,7 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
               </p>
               <button
                 type="button"
-                onClick={() => window.history.back()}
+                onClick={() => setShowCompletion(false)}
                 style={{
                   marginTop: 12,
                   width: "100%",
@@ -577,8 +619,18 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
                   cursor: "pointer",
                 }}
               >
-                Go Back
+                OK
               </button>
+              <style>{`
+                @keyframes pulseDot {
+                  0%, 100% { transform: scale(0.7); opacity: 0.5; }
+                  50% { transform: scale(1); opacity: 1; }
+                }
+                @keyframes slideGlow {
+                  0% { transform: translateX(-120%); }
+                  100% { transform: translateX(220%); }
+                }
+              `}</style>
             </div>
           </div>
         ) : null}
@@ -622,14 +674,13 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
                 alignItems: "baseline",
                 justifyContent: "center",
                 gap: 8,
-                background: "rgba(0, 0, 0, 0.25)",
                 color: "#fff",
                 padding: "8px 12px",
                 borderRadius: 12,
                 letterSpacing: 0.4,
               }}
             >
-              <span style={{ fontSize: 34, fontWeight: 800 }}>{repCount}</span>
+              <span style={{ fontSize: 80, fontWeight: 800 }}>{repCount}</span>
               {targetReps && targetReps > 0 ? (
                 <span style={{ fontSize: 12, fontWeight: 700, color: "#cbd5e1" }}>/ {targetReps}</span>
               ) : null}
