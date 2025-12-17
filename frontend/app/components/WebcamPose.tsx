@@ -83,8 +83,8 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
   const lastSentKeypointsRef = useRef<number[][] | null>(null);
   const motionThreshold = 0.003;
   const prevExerciseRef = useRef<string | undefined>(exercise);
+  const targetRepsRef = useRef<number | null>(targetReps ?? null);
   const displayExercise = exercise || prediction.exercise;
-  const displayRepsText = targetReps && targetReps > 0 ? `${repCount} / ${targetReps}` : `${repCount}`;
   const progressPercent =
     targetReps && targetReps > 0 ? Math.min(100, Math.max(0, (repCount / targetReps) * 100)) : null;
 
@@ -93,6 +93,10 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
       setShowCompletion(true);
     }
   }, [repCount, targetReps]);
+
+  useEffect(() => {
+    targetRepsRef.current = targetReps ?? null;
+  }, [targetReps]);
 
   useEffect(() => {
     if (exercise !== prevExerciseRef.current) {
@@ -233,40 +237,46 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
         if (formattedLandmarks && onLandmarks) {
           onLandmarks(formattedLandmarks);
         }
+        const filteredLandmarks = formattedLandmarks
+          ? REQUIRED_LANDMARK_INDICES.map((idx) => formattedLandmarks[idx])
+          : null;
         if (results.poseLandmarks) {
           const now = performance.now();
           if (now - lastSendRef.current >= sendIntervalMs) {
-            if (formattedLandmarks) {
-              const filtered = REQUIRED_LANDMARK_INDICES.map((idx) => formattedLandmarks[idx]);
-              if (isValidLandmarks(filtered)) {
-                if (lastSentKeypointsRef.current === null) {
-                  lastSentKeypointsRef.current = filtered;
-                } else if (hasSufficientMotion(filtered, lastSentKeypointsRef.current)) {
+            if (filteredLandmarks && isValidLandmarks(filteredLandmarks)) {
+              if (lastSentKeypointsRef.current === null) {
+                lastSentKeypointsRef.current = filteredLandmarks;
+              } else if (hasSufficientMotion(filteredLandmarks, lastSentKeypointsRef.current)) {
                   const timestamp = Date.now();
                   if (useRestFallback) {
-                    lastSentKeypointsRef.current = filtered;
+                    lastSentKeypointsRef.current = filteredLandmarks;
                     lastSendRef.current = now;
-                    sendRestPrediction(filtered, timestamp).catch(() => {});
+                    sendRestPrediction(filteredLandmarks, timestamp).catch(() => {});
                   } else if (socketRef.current && isSocketOpen) {
                     try {
                       socketRef.current.send(
                         JSON.stringify({
-                          keypoints: filtered,
+                          keypoints: filteredLandmarks,
                           timestamp,
                         })
                       );
-                      lastSentKeypointsRef.current = filtered;
+                      lastSentKeypointsRef.current = filteredLandmarks;
                       lastSendRef.current = now;
                     } catch (err) {
                       console.error("ws_send_error", err);
                     }
                   }
                 }
-              }
             }
           }
         }
-        if (results.poseLandmarks) {
+        const target = targetRepsRef.current;
+        const reachedTarget = target !== null && target > 0 && repCountRef.current >= target;
+        const canCountReps = !reachedTarget;
+        if (!canCountReps) {
+          repStageRef.current = null;
+        }
+        if (results.poseLandmarks && canCountReps) {
           const lHip = results.poseLandmarks[23];
           const lKnee = results.poseLandmarks[25];
           const lAnkle = results.poseLandmarks[27];
@@ -456,8 +466,7 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
       style={{
         position: "relative",
         width: "100%",
-        maxWidth: 960,
-        margin: "0 auto",
+        minHeight: "100vh",
       }}
     >
       {errorMessage ? (
@@ -467,9 +476,11 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
           style={{
             position: "relative",
             width: "100%",
+            height: "100vh",
             overflow: "hidden",
             display: "flex",
             justifyContent: "center",
+            alignItems: "center",
           }}
         >
           <video
@@ -479,8 +490,9 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
             muted
             style={{
               width: "100%",
-              height: "auto",
+              height: "100%",
               display: "block",
+              objectFit: "cover",
               transform: "scaleX(-1)",
             }}
             onLoadedMetadata={() => {
@@ -497,10 +509,11 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
               inset: 0,
               pointerEvents: "none",
               width: "100%",
-            height: "100%",
-            transform: "scaleX(-1)",
-          }}
-        />
+              height: "100%",
+              objectFit: "cover",
+              transform: "scaleX(-1)",
+            }}
+          />
         {showCompletion ? (
           <div
             style={{
@@ -546,7 +559,7 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
                 Great job! You hit your target.
               </h2>
               <p style={{ margin: 0, fontSize: 14, color: "#cbd5e1" }}>
-                {displayExercise || "Exercise"} · {repCount} / {targetReps}
+                {displayExercise ? `${displayExercise} - ${repCount} / ${targetReps}` : `${repCount} / ${targetReps}`}
               </p>
               <button
                 type="button"
@@ -569,94 +582,84 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
             </div>
           </div>
         ) : null}
-          <div
-            style={{
-              position: "absolute",
-              bottom: 8,
-              left: "50%",
-              transform: "translateX(-50%)",
-              background: "rgba(0, 0, 0, 0.6)",
-              color: "#fff",
-              padding: "8px 16px",
-              borderRadius: 12,
-              fontSize: 18,
-              fontWeight: 700,
-              letterSpacing: 1,
-              minWidth: 120,
-              textAlign: "center",
-            }}
-          >
-            {`REPS: ${displayRepsText}`}
-          </div>
-          {progressPercent !== null ? (
+          {displayExercise ? (
             <div
               style={{
                 position: "absolute",
-                bottom: 0,
+                top: 10,
                 left: "50%",
                 transform: "translateX(-50%)",
-                width: "90%",
-                maxWidth: 320,
-                background: "rgba(255, 255, 255, 0.28)",
-                border: "1px solid rgba(255, 255, 255, 0.35)",
+                background: "rgba(0, 0, 0, 0.55)",
+                color: "#fff",
+                padding: "8px 14px",
                 borderRadius: 999,
-                overflow: "hidden",
-                height: 12,
+                fontSize: 14,
+                fontWeight: 700,
+                letterSpacing: 0.4,
                 zIndex: 2,
-                backdropFilter: "blur(2px)",
+                textTransform: "capitalize",
               }}
             >
-              <div
-                style={{
-                  height: "100%",
-                  width: `${progressPercent}%`,
-                  background: "linear-gradient(90deg, #22c55e, #16a34a)",
-                  transition: "width 220ms ease",
-                }}
-              />
+              {displayExercise}
             </div>
           ) : null}
           <div
             style={{
               position: "absolute",
-              top: 10,
-              right: 10,
-              background: "rgba(0, 0, 0, 0.55)",
-              color: "#fff",
-              padding: "8px 12px",
-              borderRadius: 12,
-              fontSize: 13,
-              fontWeight: 600,
-              letterSpacing: 0.4,
+              bottom: 12,
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: "88%",
+              maxWidth: 320,
               display: "grid",
-              gap: 4,
+              gap: 8,
+              zIndex: 2,
             }}
           >
-            <span style={{ display: "block", fontSize: 12, opacity: 0.8 }}>
-              {displayExercise || "Exercise"}
-            </span>
-            <span>
-              {prediction.confidence > 0 ? `${Math.round(prediction.confidence * 100)}%` : "Analyzing"}
-            </span>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "baseline",
+                justifyContent: "center",
+                gap: 8,
+                background: "rgba(0, 0, 0, 0.25)",
+                color: "#fff",
+                padding: "8px 12px",
+                borderRadius: 12,
+                letterSpacing: 0.4,
+              }}
+            >
+              <span style={{ fontSize: 34, fontWeight: 800 }}>{repCount}</span>
+              {targetReps && targetReps > 0 ? (
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#cbd5e1" }}>/ {targetReps}</span>
+              ) : null}
+            </div>
+            {progressPercent !== null ? (
+              <div
+                style={{
+                  width: "100%",
+                  background: "rgba(255, 255, 255, 0.28)",
+                  border: "1px solid rgba(255, 255, 255, 0.35)",
+                  borderRadius: 999,
+                  overflow: "hidden",
+                  height: 14,
+                  backdropFilter: "blur(2px)",
+                }}
+              >
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${progressPercent}%`,
+                    background: "linear-gradient(90deg, #22c55e, #16a34a)",
+                    transition: "width 220ms ease",
+                  }}
+                />
+              </div>
+            ) : null}
           </div>
         </div>
       )}
       <canvas ref={canvasRef} style={{ display: "none" }} />
-      <div style={{ marginTop: 8, fontSize: 12, color: "#888", textAlign: "center" }}>
-        {latencyMs !== null ? `Latency: ${Math.round(latencyMs)} ms` : "Latency: --"}{" "}
-        {useRestFallback ? (
-          <>
-            Degraded mode: using REST fallback.
-            <button style={{ marginLeft: 8 }} onClick={handleRetryWebsocket}>
-              Retry WebSocket
-            </button>
-          </>
-        ) : isSocketOpen ? (
-          "WebSocket live."
-        ) : (
-          "Connecting...."
-        )}
-      </div>
     </section>
   );
 }
