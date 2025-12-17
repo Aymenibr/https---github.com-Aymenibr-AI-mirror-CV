@@ -37,6 +37,7 @@ const POSE_CONNECTIONS: Array<[number, number]> = [
   [15, 17],
 ];
 const REQUIRED_LANDMARK_INDICES = [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
+const VISIBILITY_LANDMARK_INDICES = [11, 12, 23, 24, 25, 26, 27, 28];
 
 declare global {
   interface Window {
@@ -62,6 +63,7 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
     exercise: "",
     confidence: 0,
   });
+  const [poseStatus, setPoseStatus] = useState<"not_visible" | "unstable" | "invalid_posture" | "ready">("not_visible");
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [showCompletion, setShowCompletion] = useState<boolean>(false);
   const [useRestFallback, setUseRestFallback] = useState<boolean>(false);
@@ -84,6 +86,9 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
   const motionThreshold = 0.003;
   const prevExerciseRef = useRef<string | undefined>(exercise);
   const targetRepsRef = useRef<number | null>(targetReps ?? null);
+  const kneeAngleHistoryRef = useRef<number[]>([]);
+  const STABILITY_FRAME_COUNT = 5;
+  const STABILITY_THRESHOLD = 6;
   const displayExercise = exercise || prediction.exercise;
   const progressPercent =
     targetReps && targetReps > 0 ? Math.min(100, Math.max(0, (repCount / targetReps) * 100)) : null;
@@ -103,6 +108,7 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
       repCountRef.current = 0;
       setRepCount(0);
       repStageRef.current = null;
+      kneeAngleHistoryRef.current = [];
       lastSentKeypointsRef.current = null;
       setPrediction({ exercise: "", confidence: 0 });
       setShowCompletion(false);
@@ -119,12 +125,58 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
       ? keypoints
       : null;
   };
- // d
+
   const isValidLandmarks = (keypoints: number[][] | null): keypoints is number[][] => {
     if (!keypoints || keypoints.length !== REQUIRED_LANDMARK_INDICES.length) return false;
     return keypoints.every(
       (pt) => pt.length === 3 && pt.every((c) => Number.isFinite(c)) && pt[0] > 0 && pt[1] > 0
     );
+  };
+
+  const isPoseFullyVisible = (
+    landmarks: PoseLandmark[] | undefined,
+    videoWidth: number,
+    videoHeight: number
+  ): boolean => {
+    if (!landmarks || videoWidth <= 0 || videoHeight <= 0) {
+      return false;
+    }
+    for (const idx of VISIBILITY_LANDMARK_INDICES) {
+      const lm = landmarks[idx];
+      if (!lm) {
+        return false;
+      }
+      if (lm.x < 0.05 || lm.x > 0.95 || lm.y < 0.05 || lm.y > 0.95) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const isPostureValid = (landmarks: PoseLandmark[] | undefined): boolean => {
+    if (!landmarks) {
+      return false;
+    }
+    const lShoulder = landmarks[11];
+    const rShoulder = landmarks[12];
+    const lHip = landmarks[23];
+    const rHip = landmarks[24];
+    if (!lShoulder || !rShoulder || !lHip || !rHip) {
+      return false;
+    }
+    const avgShoulderY = (lShoulder.y + rShoulder.y) / 2;
+    const avgHipY = (lHip.y + rHip.y) / 2;
+    const torsoHeight = avgHipY - avgShoulderY;
+    if (torsoHeight < 0.2) {
+      return false;
+    }
+    if (avgShoulderY >= avgHipY) {
+      return false;
+    }
+    if (Math.abs(lShoulder.y - rShoulder.y) >= 0.08) {
+      return false;
+    }
+    return true;
   };
 
   const hasSufficientMotion = (current: number[][], lastSent: number[][] | null): boolean => {
@@ -150,6 +202,20 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
     }
     const cos = Math.min(Math.max(dot / (magAB * magCB), -1), 1);
     return Math.acos(cos) * (180 / Math.PI);
+  };
+
+  const isPoseStable = (angleHistory: number[]): boolean => {
+    if (angleHistory.length < 2) {
+      return false;
+    }
+    let maxDelta = 0;
+    for (let i = 1; i < angleHistory.length; i += 1) {
+      const delta = Math.abs(angleHistory[i] - angleHistory[i - 1]);
+      if (delta > maxDelta) {
+        maxDelta = delta;
+      }
+    }
+    return maxDelta < STABILITY_THRESHOLD;
   };
 
   const applyPredictionUpdate = (data: any) => {
@@ -276,29 +342,57 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
         if (!canCountReps) {
           repStageRef.current = null;
         }
+        let nextPoseStatus: "not_visible" | "unstable" | "invalid_posture" | "ready" = "not_visible";
         if (results.poseLandmarks && canCountReps) {
-          const lHip = results.poseLandmarks[23];
-          const lKnee = results.poseLandmarks[25];
-          const lAnkle = results.poseLandmarks[27];
-          const rHip = results.poseLandmarks[24];
-          const rKnee = results.poseLandmarks[26];
-          const rAnkle = results.poseLandmarks[28];
-          if (lHip && lKnee && lAnkle && rHip && rKnee && rAnkle) {
-            const leftAngle = calculateAngle(lHip, lKnee, lAnkle);
-            const rightAngle = calculateAngle(rHip, rKnee, rAnkle);
-            const kneeAngle = (leftAngle + rightAngle) / 2;
-            const downThreshold = 100;
-            const upThreshold = 160;
-            if (kneeAngle < downThreshold) {
-              repStageRef.current = "down";
-            }
-            if (kneeAngle > upThreshold && repStageRef.current === "down") {
-              repStageRef.current = "up";
-              repCountRef.current += 1;
-              setRepCount(repCountRef.current);
+          const vidW = videoRef.current?.videoWidth ?? 0;
+          const vidH = videoRef.current?.videoHeight ?? 0;
+          if (!isPoseFullyVisible(results.poseLandmarks, vidW, vidH)) {
+            repStageRef.current = null;
+            kneeAngleHistoryRef.current = [];
+            nextPoseStatus = "not_visible";
+          } else {
+            const lHip = results.poseLandmarks[23];
+            const lKnee = results.poseLandmarks[25];
+            const lAnkle = results.poseLandmarks[27];
+            const rHip = results.poseLandmarks[24];
+            const rKnee = results.poseLandmarks[26];
+            const rAnkle = results.poseLandmarks[28];
+            if (lHip && lKnee && lAnkle && rHip && rKnee && rAnkle) {
+              const leftAngle = calculateAngle(lHip, lKnee, lAnkle);
+              const rightAngle = calculateAngle(rHip, rKnee, rAnkle);
+              const kneeAngle = (leftAngle + rightAngle) / 2;
+              const downThreshold = 100;
+              const upThreshold = 160;
+              const isUpright = repStageRef.current === null && kneeAngle > upThreshold;
+              if (isUpright && !isPostureValid(results.poseLandmarks)) {
+                repStageRef.current = null;
+                kneeAngleHistoryRef.current = [];
+                nextPoseStatus = "invalid_posture";
+              } else {
+                const history = kneeAngleHistoryRef.current;
+                history.push(kneeAngle);
+                if (history.length > STABILITY_FRAME_COUNT) {
+                  history.shift();
+                }
+                if (isUpright && !isPoseStable(history)) {
+                  repStageRef.current = null;
+                  nextPoseStatus = "unstable";
+                } else {
+                  nextPoseStatus = "ready";
+                  if (kneeAngle < downThreshold) {
+                    repStageRef.current = "down";
+                  }
+                  if (kneeAngle > upThreshold && repStageRef.current === "down") {
+                    repStageRef.current = "up";
+                    repCountRef.current += 1;
+                    setRepCount(repCountRef.current);
+                  }
+                }
+              }
             }
           }
         }
+        setPoseStatus(nextPoseStatus);
         if (results.poseLandmarks && videoRef.current && overlayCanvasRef.current) {
           const vidW = videoRef.current.videoWidth;
           const vidH = videoRef.current.videoHeight;
@@ -483,6 +577,32 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
             alignItems: "center",
           }}
         >
+          {poseStatus !== "ready" ? (
+            <div
+              style={{
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                background: "rgba(0, 0, 0, 0.6)",
+                color: "#fff",
+                padding: "14px 20px",
+                borderRadius: 14,
+                border: "3px solid #ef4444",
+                fontSize: 23,
+                fontWeight: 800,
+                letterSpacing: 0.6,
+                textAlign: "center",
+                zIndex: 2,
+              }}
+            >
+              {poseStatus === "not_visible"
+                ? "Step back into the frame"
+                : poseStatus === "unstable"
+                ? "Hold steady"
+                : "Stand upright"}
+            </div>
+          ) : null}
           <video
             ref={videoRef}
             autoPlay
@@ -655,59 +775,61 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
               {displayExercise}
             </div>
           ) : null}
-          <div
-            style={{
-              position: "absolute",
-              bottom: 12,
-              left: "50%",
-              transform: "translateX(-50%)",
-              width: "88%",
-              maxWidth: 320,
-              display: "grid",
-              gap: 8,
-              zIndex: 2,
-            }}
-          >
+          {poseStatus === "ready" ? (
             <div
               style={{
-                display: "flex",
-                alignItems: "baseline",
-                justifyContent: "center",
+                position: "absolute",
+                bottom: 12,
+                left: "50%",
+                transform: "translateX(-50%)",
+                width: "88%",
+                maxWidth: 320,
+                display: "grid",
                 gap: 8,
-                color: "#fff",
-                padding: "8px 12px",
-                borderRadius: 12,
-                letterSpacing: 0.4,
+                zIndex: 2,
               }}
             >
-              <span style={{ fontSize: 80, fontWeight: 800 }}>{repCount}</span>
-              {targetReps && targetReps > 0 ? (
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#cbd5e1" }}>/ {targetReps}</span>
-              ) : null}
-            </div>
-            {progressPercent !== null ? (
               <div
                 style={{
-                  width: "100%",
-                  background: "rgba(255, 255, 255, 0.28)",
-                  border: "1px solid rgba(255, 255, 255, 0.35)",
-                  borderRadius: 999,
-                  overflow: "hidden",
-                  height: 14,
-                  backdropFilter: "blur(2px)",
+                  display: "flex",
+                  alignItems: "baseline",
+                  justifyContent: "center",
+                  gap: 8,
+                  color: "#fff",
+                  padding: "8px 12px",
+                  borderRadius: 12,
+                  letterSpacing: 0.4,
                 }}
               >
+                <span style={{ fontSize: 80, fontWeight: 800 }}>{repCount}</span>
+                {targetReps && targetReps > 0 ? (
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#cbd5e1" }}>/ {targetReps}</span>
+                ) : null}
+              </div>
+              {progressPercent !== null ? (
                 <div
                   style={{
-                    height: "100%",
-                    width: `${progressPercent}%`,
-                    background: "linear-gradient(90deg, #22c55e, #16a34a)",
-                    transition: "width 220ms ease",
+                    width: "100%",
+                    background: "rgba(255, 255, 255, 0.28)",
+                    border: "1px solid rgba(255, 255, 255, 0.35)",
+                    borderRadius: 999,
+                    overflow: "hidden",
+                    height: 14,
+                    backdropFilter: "blur(2px)",
                   }}
-                />
-              </div>
-            ) : null}
-          </div>
+                >
+                  <div
+                    style={{
+                      height: "100%",
+                      width: `${progressPercent}%`,
+                      background: "linear-gradient(90deg, #22c55e, #16a34a)",
+                      transition: "width 220ms ease",
+                    }}
+                  />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       )}
       <canvas ref={canvasRef} style={{ display: "none" }} />
