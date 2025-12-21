@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 type Props = {
   onFrameCaptured?: (imageData: ImageData) => void;
@@ -87,6 +88,16 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
   const prevExerciseRef = useRef<string | undefined>(exercise);
   const targetRepsRef = useRef<number | null>(targetReps ?? null);
   const kneeAngleHistoryRef = useRef<number[]>([]);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
+  const [sessionResponse, setSessionResponse] = useState<{
+    id: string | null;
+    exercise: string;
+    status: "done" | "not_done";
+  } | null>(null);
+  const hasReportedStatusRef = useRef<boolean>(false);
+  const latestExerciseRef = useRef<string>("");
+  const searchParams = useSearchParams();
   const STABILITY_FRAME_COUNT = 5;
   const STABILITY_THRESHOLD = 6;
   const displayExercise = exercise || prediction.exercise;
@@ -112,9 +123,19 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
       lastSentKeypointsRef.current = null;
       setPrediction({ exercise: "", confidence: 0 });
       setShowCompletion(false);
+      setSessionResponse(null);
+      hasReportedStatusRef.current = false;
       prevExerciseRef.current = exercise;
     }
   }, [exercise]);
+
+  useEffect(() => {
+    // Capture `id` from the URL (e.g., /squat?id=ABC123) for later reporting.
+    const idFromUrl = searchParams?.get("id");
+    const normalizedId = idFromUrl && idFromUrl.trim().length > 0 ? decodeURIComponent(idFromUrl.trim()) : null;
+    sessionIdRef.current = normalizedId;
+    setSessionId(normalizedId);
+  }, [searchParams]);
 
   const formatLandmarks = (poseLandmarks: PoseLandmark[] | undefined): number[][] | null => {
     if (!poseLandmarks || poseLandmarks.length !== 33) {
@@ -217,6 +238,44 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
     }
     return maxDelta < STABILITY_THRESHOLD;
   };
+
+  const setSessionResult = useCallback(
+    (status: "done" | "not_done") => {
+      const payload = {
+        id: sessionIdRef.current,
+        exercise: displayExercise || exercise || "",
+        status,
+      };
+      hasReportedStatusRef.current = true;
+      setSessionResponse(payload);
+      console.info("session_status", payload);
+    },
+    [displayExercise, exercise]
+  );
+
+  useEffect(() => {
+    latestExerciseRef.current = displayExercise || exercise || "";
+  }, [displayExercise, exercise]);
+
+  useEffect(() => {
+    if (showCompletion) {
+      setSessionResult("done");
+    }
+  }, [showCompletion, setSessionResult]);
+
+  useEffect(() => {
+    // If the user leaves before completion, emit a "not_done" status with the captured session id.
+    return () => {
+      if (!hasReportedStatusRef.current) {
+        const payload = {
+          id: sessionIdRef.current,
+          exercise: latestExerciseRef.current,
+          status: "not_done" as const,
+        };
+        console.info("session_status", payload);
+      }
+    };
+  }, []);
 
   const applyPredictionUpdate = (data: any) => {
     const rawExercise = typeof data.exercise === "string" ? data.exercise.trim() : "";
