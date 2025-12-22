@@ -97,6 +97,7 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
   } | null>(null);
   const hasReportedStatusRef = useRef<boolean>(false);
   const latestExerciseRef = useRef<string>("");
+  const appNotifiedRef = useRef<boolean>(false);
   const searchParams = useSearchParams();
   const STABILITY_FRAME_COUNT = 5;
   const STABILITY_THRESHOLD = 6;
@@ -125,6 +126,7 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
       setShowCompletion(false);
       setSessionResponse(null);
       hasReportedStatusRef.current = false;
+      appNotifiedRef.current = false;
       prevExerciseRef.current = exercise;
     }
   }, [exercise]);
@@ -253,6 +255,15 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
     [displayExercise, exercise]
   );
 
+  const sendToApp = useCallback((payload: unknown) => {
+    try {
+      if (typeof window === "undefined") return;
+      window.postMessage(JSON.stringify(payload), "*");
+    } catch (err) {
+      console.error("post_message_error", err);
+    }
+  }, []);
+
   useEffect(() => {
     latestExerciseRef.current = displayExercise || exercise || "";
   }, [displayExercise, exercise]);
@@ -276,6 +287,40 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
       }
     };
   }, []);
+
+  useEffect(() => {
+    const handleAck = (event: MessageEvent) => {
+      let data: any = event.data;
+      if (typeof data === "string") {
+        try {
+          data = JSON.parse(data);
+        } catch {
+          return;
+        }
+      }
+      if (!data || typeof data !== "object" || data.type !== "EXERCISE_ACK") {
+        return;
+      }
+      console.info("app_ack", data);
+    };
+    window.addEventListener("message", handleAck);
+    return () => window.removeEventListener("message", handleAck);
+  }, []);
+
+  useEffect(() => {
+    if (!showCompletion) return;
+    const target = targetRepsRef.current;
+    const reachedTarget = target !== null && target > 0 && repCountRef.current >= target;
+    if (!reachedTarget || poseStatus !== "ready" || appNotifiedRef.current) return;
+    const payload = {
+      type: "EXERCISE_COMPLETED",
+      exerciseId: sessionIdRef.current ?? "",
+      exercise: displayExercise || exercise || "",
+      repsDone: repCountRef.current,
+    };
+    appNotifiedRef.current = true;
+    sendToApp(payload);
+  }, [showCompletion, poseStatus, displayExercise, exercise, sendToApp]);
 
   const applyPredictionUpdate = (data: any) => {
     const rawExercise = typeof data.exercise === "string" ? data.exercise.trim() : "";
