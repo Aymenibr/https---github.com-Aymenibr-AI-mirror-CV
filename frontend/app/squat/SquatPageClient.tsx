@@ -23,7 +23,7 @@ export default function SquatPageClient() {
     >
       <Script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" strategy="beforeInteractive" />
       <Script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" strategy="beforeInteractive" />
-      <WebcamPose exercise="squat" targetReps={targetReps} enableBackend={false} />
+      <WebcamPose exercise="squat" targetReps={targetReps} />
     </main>
   );
 }
