@@ -120,13 +120,17 @@ export default function PressPose({ targetReps }: Props) {
 
     const init = async () => {
       if (typeof window === "undefined") return;
-      if (!window.Camera || !window.Pose) {
+      if (!videoRef.current) return;
+      const [{ Pose }, { Camera }] = await Promise.all([
+        import("@mediapipe/pose"),
+        import("@mediapipe/camera_utils"),
+      ]);
+      if (!Pose || !Camera) {
         setErrorMessage("MediaPipe Pose not available.");
         return;
       }
-      if (!videoRef.current) return;
 
-      const pose = new window.Pose({
+      const pose = new Pose({
         locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`,
       });
       pose.setOptions({
@@ -302,7 +306,7 @@ export default function PressPose({ targetReps }: Props) {
       });
       poseRef.current = pose;
 
-      const camera = new window.Camera(videoRef.current, {
+      const camera = new Camera(videoRef.current, {
         onFrame: async () => {
           if (!isMounted || !poseRef.current) return;
           if (!videoRef.current) return;

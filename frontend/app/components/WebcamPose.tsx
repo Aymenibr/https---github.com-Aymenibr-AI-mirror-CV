@@ -407,15 +407,19 @@ export default function WebcamPose({
       if (typeof window === "undefined") {
         return;
       }
-      if (!window.Camera || !window.Pose) {
-        setErrorMessage("MediaPipe Camera or Pose unavailable.");
-        return;
-      }
       if (!videoRef.current) {
         return;
       }
+      const [{ Pose }, { Camera }] = await Promise.all([
+        import("@mediapipe/pose"),
+        import("@mediapipe/camera_utils"),
+      ]);
+      if (!Pose || !Camera) {
+        setErrorMessage("MediaPipe Camera or Pose unavailable.");
+        return;
+      }
 
-      const pose = new window.Pose({
+      const pose = new Pose({
         locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`,
       });
       pose.setOptions({
@@ -559,7 +563,7 @@ export default function WebcamPose({
       });
       poseRef.current = pose;
 
-      const camera = new window.Camera(videoRef.current, {
+      const camera = new Camera(videoRef.current, {
         onFrame: async () => {
           if (!isMounted || !poseRef.current) return;
           if (!videoRef.current || videoRef.current.videoWidth === 0 || videoRef.current.videoHeight === 0) {
