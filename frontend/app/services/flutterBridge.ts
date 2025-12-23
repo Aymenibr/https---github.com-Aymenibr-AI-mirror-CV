@@ -8,7 +8,7 @@ if (typeof window !== "undefined") {
   window.addEventListener("flutterInAppWebViewPlatformReady", markReady, { once: true });
 }
 
-const getQueryParam = (key: string, fallback: string): string => {
+export const getQueryParam = (key: string, fallback: string): string => {
   if (typeof window === "undefined") return fallback;
   const params = new URLSearchParams(window.location.search);
   const value = params.get(key);

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { getQueryParam, sendExerciseCompletedToFlutter } from "../services/flutterBridge";
 
 type Props = {
   onFrameCaptured?: (imageData: ImageData) => void;
@@ -101,13 +102,23 @@ export default function WebcamPose({
   const hasReportedStatusRef = useRef<boolean>(false);
   const latestExerciseRef = useRef<string>("");
   const appNotifiedRef = useRef<boolean>(false);
+  const webviewExitRef = useRef<boolean>(false);
   const searchParams = useSearchParams();
   const STABILITY_FRAME_COUNT = 5;
   const STABILITY_THRESHOLD = 6;
   const hasTarget = typeof targetReps === "number" && targetReps > 0;
   const displayExercise = exercise || (enableBackend ? prediction.exercise : "");
   const progressPercent = hasTarget ? Math.min(100, Math.max(0, (repCount / targetReps) * 100)) : null;
-  const exitSession = useCallback(() => {
+  const buildFlutterPayload = (exerciseStatus: "done" | "tobecontinued" | "no_performance", reps: number) => ({
+    type: "EXERCISE_COMPLETED" as const,
+    userId: getQueryParam("user_id", "No_ID"),
+    exerciseId: getQueryParam("exercise_id", "No_ID"),
+    exerciseStatus,
+    repsDone: reps,
+  });
+  const exitWebview = () => {
+    if (webviewExitRef.current) return;
+    webviewExitRef.current = true;
     try {
       window.close();
       setTimeout(() => {
@@ -116,19 +127,20 @@ export default function WebcamPose({
     } catch {
       window.location.href = "about:blank";
     }
-  }, []);
+  };
+  const triggerTestComplete = () => {
+    const target = targetRepsRef.current;
+    const nextReps = target && target > 0 ? target : repCountRef.current + 1;
+    repCountRef.current = nextReps;
+    setRepCount(nextReps);
+    setShowCompletion(true);
+  };
 
   useEffect(() => {
     if (targetReps && targetReps > 0 && repCount >= targetReps) {
       setShowCompletion(true);
     }
   }, [repCount, targetReps]);
-
-  useEffect(() => {
-    if (showCompletion && hasTarget) {
-      exitSession();
-    }
-  }, [showCompletion, hasTarget, exitSession]);
 
   useEffect(() => {
     targetRepsRef.current = targetReps ?? null;
@@ -327,19 +339,27 @@ export default function WebcamPose({
   }, []);
 
   useEffect(() => {
-    if (!showCompletion) return;
+    return () => {
+      if (repCountRef.current === 0) {
+        const payload = buildFlutterPayload("no_performance", 0);
+        sendExerciseCompletedToFlutter(payload).catch(() => {});
+      }
+    };
+  }, [buildFlutterPayload]);
+
+  const handleCompletionOk = useCallback(() => {
     const target = targetRepsRef.current;
     const reachedTarget = target !== null && target > 0 && repCountRef.current >= target;
-    if (!reachedTarget || poseStatus !== "ready" || appNotifiedRef.current) return;
-    const payload = {
-      type: "EXERCISE_COMPLETED",
-      exerciseId: sessionIdRef.current ?? "",
-      exercise: displayExercise || exercise || "",
-      repsDone: repCountRef.current,
-    };
-    appNotifiedRef.current = true;
-    sendToApp(payload);
-  }, [showCompletion, poseStatus, displayExercise, exercise, sendToApp]);
+    if (reachedTarget && poseStatus === "ready" && !appNotifiedRef.current) {
+      const payload = buildFlutterPayload("done", repCountRef.current);
+      sendExerciseCompletedToFlutter(payload)
+        .catch(() => {})
+        .finally(() => exitWebview());
+      appNotifiedRef.current = true;
+      return;
+    }
+    exitWebview();
+  }, [buildFlutterPayload, poseStatus]);
 
   const applyPredictionUpdate = (data: any) => {
     const rawExercise = typeof data.exercise === "string" ? data.exercise.trim() : "";
@@ -864,7 +884,7 @@ export default function WebcamPose({
               </p>
               <button
                 type="button"
-                onClick={() => setShowCompletion(false)}
+                onClick={handleCompletionOk}
                 style={{
                   marginTop: 12,
                   width: "100%",
@@ -971,7 +991,9 @@ export default function WebcamPose({
           <button
             type="button"
             onClick={() => {
-              exitSession();
+              sendExerciseCompletedToFlutter(buildFlutterPayload("tobecontinued", repCountRef.current))
+                .catch(() => {})
+                .finally(() => exitWebview());
             }}
             style={{
               position: "absolute",
@@ -989,6 +1011,26 @@ export default function WebcamPose({
             }}
           >
             Continue later
+          </button>
+          <button
+            type="button"
+            onClick={triggerTestComplete}
+            style={{
+              position: "absolute",
+              left: 14,
+              bottom: 14,
+              padding: "10px 14px",
+              borderRadius: 12,
+              border: "1px solid rgba(255,255,255,0.14)",
+              background: "rgba(0,0,0,0.6)",
+              color: "#e2e8f0",
+              fontWeight: 700,
+              cursor: "pointer",
+              zIndex: 4,
+              backdropFilter: "blur(6px)",
+            }}
+          >
+            Test complete
           </button>
         </div>
       )}

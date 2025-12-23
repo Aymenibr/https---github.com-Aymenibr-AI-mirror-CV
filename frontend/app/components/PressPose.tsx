@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { getQueryParam, sendExerciseCompletedToFlutter } from "../services/flutterBridge";
 
 type PoseLandmark = { x: number; y: number; z: number };
 type PoseResult = { poseLandmarks?: PoseLandmark[] };
@@ -104,7 +105,18 @@ export default function PressPose({ targetReps }: Props) {
   const progressPercent = hasTarget ? Math.min(100, Math.max(0, (repCount / targetReps) * 100)) : null;
   const readyOverlayBottom = 28;
   const progressValue = progressPercent ?? 0;
-  const exitSession = () => {
+  const webviewExitRef = useRef<boolean>(false);
+  const completionSentRef = useRef<boolean>(false);
+  const buildFlutterPayload = (exerciseStatus: "done" | "tobecontinued" | "no_performance", reps: number) => ({
+    type: "EXERCISE_COMPLETED" as const,
+    userId: getQueryParam("user_id", "No_ID"),
+    exerciseId: getQueryParam("exercise_id", "No_ID"),
+    exerciseStatus,
+    repsDone: reps,
+  });
+  const exitWebview = () => {
+    if (webviewExitRef.current) return;
+    webviewExitRef.current = true;
     try {
       window.close();
       setTimeout(() => {
@@ -113,6 +125,25 @@ export default function PressPose({ targetReps }: Props) {
     } catch {
       window.location.href = "about:blank";
     }
+  };
+  const triggerTestComplete = () => {
+    const target = targetReps ?? null;
+    const nextReps = target && target > 0 ? target : repCountRef.current + 1;
+    repCountRef.current = nextReps;
+    setRepCount(nextReps);
+    setShowCompletion(true);
+  };
+  const handleCompletionOk = () => {
+    const target = targetReps ?? null;
+    const reachedTarget = target !== null && target > 0 && repCountRef.current >= target;
+    if (reachedTarget && !completionSentRef.current) {
+      completionSentRef.current = true;
+      sendExerciseCompletedToFlutter(buildFlutterPayload("done", repCountRef.current))
+        .catch(() => {})
+        .finally(() => exitWebview());
+      return;
+    }
+    exitWebview();
   };
 
   useEffect(() => {
@@ -341,10 +372,13 @@ export default function PressPose({ targetReps }: Props) {
   }, []);
 
   useEffect(() => {
-    if (showCompletion && hasTarget) {
-      exitSession();
-    }
-  }, [showCompletion, hasTarget]);
+    return () => {
+      if (repCountRef.current === 0) {
+        const payload = buildFlutterPayload("no_performance", 0);
+        sendExerciseCompletedToFlutter(payload).catch(() => {});
+      }
+    };
+  }, [buildFlutterPayload]);
 
   return (
     <section
@@ -483,7 +517,9 @@ export default function PressPose({ targetReps }: Props) {
           <button
             type="button"
             onClick={() => {
-              exitSession();
+              sendExerciseCompletedToFlutter(buildFlutterPayload("tobecontinued", repCountRef.current))
+                .catch(() => {})
+                .finally(() => exitWebview());
             }}
             style={{
               position: "absolute",
@@ -501,6 +537,26 @@ export default function PressPose({ targetReps }: Props) {
             }}
           >
             Continue later
+          </button>
+          <button
+            type="button"
+            onClick={triggerTestComplete}
+            style={{
+              position: "absolute",
+              left: 14,
+              bottom: 14,
+              padding: "10px 14px",
+              borderRadius: 12,
+              border: "1px solid rgba(255,255,255,0.14)",
+              background: "rgba(0,0,0,0.6)",
+              color: "#e2e8f0",
+              fontWeight: 700,
+              cursor: "pointer",
+              zIndex: 4,
+              backdropFilter: "blur(6px)",
+            }}
+          >
+            Test complete
           </button>
           {showCompletion ? (
             <div
@@ -551,7 +607,7 @@ export default function PressPose({ targetReps }: Props) {
                 </p>
                 <button
                   type="button"
-                  onClick={() => setShowCompletion(false)}
+                  onClick={handleCompletionOk}
                   style={{
                     marginTop: 12,
                     width: "100%",
