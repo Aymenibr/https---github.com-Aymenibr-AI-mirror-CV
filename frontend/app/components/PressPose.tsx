@@ -100,6 +100,20 @@ export default function PressPose({ targetReps }: Props) {
   const minOverheadLift = 0.14; // wrists must rise above shoulders by this delta for top
   const shoulderBand = 0.14; // wrist vertical tolerance around shoulder height for the bottom
   const horizontalAlignTolerance = 0.35; // wrists should stay roughly above shoulders (not in front)
+  const hasTarget = typeof targetReps === "number" && targetReps > 0; // derived before hooks
+  const progressPercent = hasTarget ? Math.min(100, Math.max(0, (repCount / targetReps) * 100)) : null;
+  const readyOverlayBottom = 28;
+  const progressValue = progressPercent ?? 0;
+  const exitSession = () => {
+    try {
+      window.close();
+      setTimeout(() => {
+        window.location.href = "about:blank";
+      }, 100);
+    } catch {
+      window.location.href = "about:blank";
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -327,21 +341,6 @@ export default function PressPose({ targetReps }: Props) {
       exitSession();
     }
   }, [showCompletion, hasTarget]);
-
-  const hasTarget = typeof targetReps === "number" && targetReps > 0;
-  const progressPercent = hasTarget ? Math.min(100, Math.max(0, (repCount / targetReps) * 100)) : null;
-  const readyOverlayBottom = 28;
-  const progressValue = progressPercent ?? 0;
-  const exitSession = () => {
-    try {
-      window.close();
-      setTimeout(() => {
-        window.location.href = "about:blank";
-      }, 100);
-    } catch {
-      window.location.href = "about:blank";
-    }
-  };
 
   return (
     <section
