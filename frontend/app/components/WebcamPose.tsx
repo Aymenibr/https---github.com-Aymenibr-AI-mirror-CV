@@ -9,7 +9,6 @@ type Props = {
   onLandmarks?: (keypoints: number[][]) => void;
   exercise?: string;
   targetReps?: number | null;
-  enableBackend?: boolean;
 };
 
 type PoseLandmark = { x: number; y: number; z: number };
@@ -54,7 +53,6 @@ export default function WebcamPose({
   onLandmarks,
   exercise,
   targetReps,
-  enableBackend = true,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -65,30 +63,8 @@ export default function WebcamPose({
   const repCountRef = useRef<number>(0);
   const repStageRef = useRef<"up" | "down" | null>(null);
   const [repCount, setRepCount] = useState<number>(0);
-  const socketRef = useRef<WebSocket | null>(null);
-  const [isSocketOpen, setIsSocketOpen] = useState<boolean>(false);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const [prediction, setPrediction] = useState<{ exercise: string; confidence: number }>({
-    exercise: "",
-    confidence: 0,
-  });
   const [poseStatus, setPoseStatus] = useState<"not_visible" | "unstable" | "invalid_posture" | "ready">("not_visible");
-  const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [showCompletion, setShowCompletion] = useState<boolean>(false);
-  const [useRestFallback, setUseRestFallback] = useState<boolean>(false);
-  const wsFailureCountRef = useRef<number>(0);
-  const restInFlightRef = useRef<boolean>(false);
-  const lastSendRef = useRef<number>(0);
-  const sendIntervalMs = 100;
-  const backendBase =
-    enableBackend && process.env.NEXT_PUBLIC_API_URL ? process.env.NEXT_PUBLIC_API_URL : null;
-  const normalizedBase = backendBase ? backendBase.replace(/\/$/, "") : null;
-  const wsUrl = normalizedBase
-    ? `${normalizedBase.replace(/^http:\/\//, "ws://").replace(/^https:\/\//, "wss://")}/ws/predict`
-    : null;
-  const restUrl = normalizedBase ? `${normalizedBase}/predict` : null;
-  const lastSentKeypointsRef = useRef<number[][] | null>(null);
-  const motionThreshold = 0.003;
   const prevExerciseRef = useRef<string | undefined>(exercise);
   const targetRepsRef = useRef<number | null>(targetReps ?? null);
   const kneeAngleHistoryRef = useRef<number[]>([]);
@@ -107,7 +83,7 @@ export default function WebcamPose({
   const STABILITY_FRAME_COUNT = 5;
   const STABILITY_THRESHOLD = 6;
   const hasTarget = typeof targetReps === "number" && targetReps > 0;
-  const displayExercise = exercise || (enableBackend ? prediction.exercise : "");
+  const displayExercise = exercise || "";
   const progressPercent = hasTarget ? Math.min(100, Math.max(0, (repCount / targetReps) * 100)) : null;
   const buildFlutterPayload = (exerciseStatus: "done" | "tobecontinued" | "no_performance", reps: number) => ({
     type: "EXERCISE_COMPLETED" as const,
@@ -152,8 +128,6 @@ export default function WebcamPose({
       setRepCount(0);
       repStageRef.current = null;
       kneeAngleHistoryRef.current = [];
-      lastSentKeypointsRef.current = null;
-      setPrediction({ exercise: "", confidence: 0 });
       setShowCompletion(false);
       setSessionResponse(null);
       hasReportedStatusRef.current = false;
@@ -231,18 +205,6 @@ export default function WebcamPose({
       return false;
     }
     return true;
-  };
-
-  const hasSufficientMotion = (current: number[][], lastSent: number[][] | null): boolean => {
-    if (!lastSent) return false;
-    let maxDelta = 0;
-    for (let i = 0; i < current.length; i += 1) {
-      const delta = Math.abs(current[i][1] - lastSent[i][1]);
-      if (delta > maxDelta) {
-        maxDelta = delta;
-      }
-    }
-    return maxDelta >= motionThreshold;
   };
 
   const calculateAngle = (a: PoseLandmark, b: PoseLandmark, c: PoseLandmark): number => {
@@ -361,65 +323,6 @@ export default function WebcamPose({
     exitWebview();
   }, [buildFlutterPayload, poseStatus]);
 
-  const applyPredictionUpdate = (data: any) => {
-    const rawExercise = typeof data.exercise === "string" ? data.exercise.trim() : "";
-    const exercise = rawExercise.length > 0 ? rawExercise : "";
-    const confidence =
-      typeof data.confidence === "number" && Number.isFinite(data.confidence) ? data.confidence : 0;
-
-    setPrediction({ exercise, confidence: exercise ? confidence : 0 });
-    const repsValue =
-      typeof data.rep_count === "number" && Number.isFinite(data.rep_count)
-        ? data.rep_count
-        : typeof data.reps === "number" && Number.isFinite(data.reps)
-        ? data.reps
-        : null;
-    if (repsValue !== null && repsValue > 0) {
-      repCountRef.current = repsValue;
-      setRepCount(repsValue);
-    }
-    if (typeof data.timestamp === "number" && Number.isFinite(data.timestamp)) {
-      setLatencyMs(Date.now() - data.timestamp);
-    }
-  };
-
-  const sendRestPrediction = async (keypoints: number[][], timestamp: number) => {
-    if (!enableBackend || !restUrl) return;
-    if (restInFlightRef.current) return;
-    restInFlightRef.current = true;
-    try {
-      const res = await fetch(restUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ keypoints, timestamp }),
-      });
-      if (!res.ok) {
-        return;
-      }
-      const data = await res.json();
-      applyPredictionUpdate(data);
-    } catch (err) {
-      console.error("rest_inference_error", err);
-    } finally {
-      restInFlightRef.current = false;
-    }
-  };
-
-  const handleRetryWebsocket = () => {
-    if (!enableBackend) return;
-    wsFailureCountRef.current = 0;
-    setUseRestFallback(false);
-    setLatencyMs(null);
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
-    }
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      socketRef.current.close();
-      socketRef.current = null;
-    }
-  };
-
   useEffect(() => {
     let isMounted = true;
 
@@ -451,39 +354,6 @@ export default function WebcamPose({
         const formattedLandmarks = formatLandmarks(results.poseLandmarks);
         if (formattedLandmarks && onLandmarks) {
           onLandmarks(formattedLandmarks);
-        }
-        const filteredLandmarks = formattedLandmarks
-          ? REQUIRED_LANDMARK_INDICES.map((idx) => formattedLandmarks[idx])
-          : null;
-        if (enableBackend && results.poseLandmarks) {
-          const now = performance.now();
-          if (now - lastSendRef.current >= sendIntervalMs) {
-            if (filteredLandmarks && isValidLandmarks(filteredLandmarks)) {
-              if (lastSentKeypointsRef.current === null) {
-                lastSentKeypointsRef.current = filteredLandmarks;
-              } else if (hasSufficientMotion(filteredLandmarks, lastSentKeypointsRef.current)) {
-                const timestamp = Date.now();
-                if (useRestFallback) {
-                  lastSentKeypointsRef.current = filteredLandmarks;
-                  lastSendRef.current = now;
-                  sendRestPrediction(filteredLandmarks, timestamp).catch(() => {});
-                } else if (socketRef.current && isSocketOpen) {
-                  try {
-                    socketRef.current.send(
-                      JSON.stringify({
-                        keypoints: filteredLandmarks,
-                        timestamp,
-                      })
-                    );
-                    lastSentKeypointsRef.current = filteredLandmarks;
-                    lastSendRef.current = now;
-                  } catch (err) {
-                    console.error("ws_send_error", err);
-                  }
-                }
-              }
-            }
-          }
         }
         const target = targetRepsRef.current;
         const reachedTarget = target !== null && target > 0 && repCountRef.current >= target;
@@ -630,84 +500,6 @@ export default function WebcamPose({
       }
     };
   }, [onFrameCaptured, onLandmarks]);
-
-  useEffect(() => {
-    let reconnectDelayMs = 1000;
-
-    const connect = () => {
-      if (!enableBackend || !wsUrl) {
-        return;
-      }
-      if (useRestFallback) {
-        return;
-      }
-      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-        return;
-      }
-      try {
-        const socket = new WebSocket(wsUrl);
-        socketRef.current = socket;
-
-        socket.onopen = () => {
-          setIsSocketOpen(true);
-          setUseRestFallback(false);
-          reconnectDelayMs = 1000;
-          wsFailureCountRef.current = 0;
-        };
-
-        socket.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            applyPredictionUpdate(data);
-          } catch (err) {
-            console.error("ws_message_parse_error", err);
-          }
-        };
-
-        socket.onerror = (err) => {
-          console.error("ws_error", err);
-          wsFailureCountRef.current += 1;
-        };
-
-        socket.onclose = () => {
-          setIsSocketOpen(false);
-          wsFailureCountRef.current += 1;
-          if (wsFailureCountRef.current >= 3) {
-            if (reconnectTimeoutRef.current) {
-              clearTimeout(reconnectTimeoutRef.current);
-              reconnectTimeoutRef.current = null;
-            }
-            setUseRestFallback(true);
-            return;
-          }
-          if (!reconnectTimeoutRef.current) {
-            reconnectTimeoutRef.current = setTimeout(() => {
-              reconnectTimeoutRef.current = null;
-              reconnectDelayMs = Math.min(reconnectDelayMs * 2, 10000);
-              connect();
-            }, reconnectDelayMs);
-          }
-        };
-      } catch (err) {
-        console.error("ws_connect_error", err);
-      }
-    };
-
-    if (enableBackend && wsUrl) {
-      connect();
-    }
-
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.close();
-        socketRef.current = null;
-      }
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = null;
-      }
-    };
-  }, [wsUrl, useRestFallback, enableBackend]);
 
   const readyOverlayBottom = 28;
   const progressValue = progressPercent ?? 0;
