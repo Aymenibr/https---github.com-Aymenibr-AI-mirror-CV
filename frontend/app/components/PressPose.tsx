@@ -322,8 +322,26 @@ export default function PressPose({ targetReps }: Props) {
     };
   }, []);
 
-  const progressPercent =
-    targetReps && targetReps > 0 ? Math.min(100, Math.max(0, (repCount / targetReps) * 100)) : null;
+  useEffect(() => {
+    if (showCompletion && hasTarget) {
+      exitSession();
+    }
+  }, [showCompletion, hasTarget]);
+
+  const hasTarget = typeof targetReps === "number" && targetReps > 0;
+  const progressPercent = hasTarget ? Math.min(100, Math.max(0, (repCount / targetReps) * 100)) : null;
+  const readyOverlayBottom = 28;
+  const progressValue = progressPercent ?? 0;
+  const exitSession = () => {
+    try {
+      window.close();
+      setTimeout(() => {
+        window.location.href = "about:blank";
+      }, 100);
+    } catch {
+      window.location.href = "about:blank";
+    }
+  };
 
   return (
     <section
@@ -331,7 +349,7 @@ export default function PressPose({ targetReps }: Props) {
         position: "relative",
         width: "100%",
         minHeight: "100vh",
-        background: "#0f172a",
+        background: "#0b1224",
       }}
     >
       {errorMessage ? (
@@ -341,6 +359,7 @@ export default function PressPose({ targetReps }: Props) {
           style={{
             position: "relative",
             width: "100%",
+            minHeight: "100vh",
             height: "100vh",
             overflow: "hidden",
             display: "flex",
@@ -403,79 +422,83 @@ export default function PressPose({ targetReps }: Props) {
             }}
           />
 
-          <div
-            style={{
-              position: "absolute",
-              top: 12,
-              left: "50%",
-              transform: "translateX(-50%)",
-              background: "rgba(0, 0, 0, 0.55)",
-              color: "#fff",
-              padding: "8px 14px",
-              borderRadius: 999,
-              fontSize: 14,
-              fontWeight: 700,
-              letterSpacing: 0.4,
-              zIndex: 2,
-            }}
-          >
-            Shoulder Press
-          </div>
-
-          <div
-            style={{
-              position: "absolute",
-              bottom: 12,
-              left: "50%",
-              transform: "translateX(-50%)",
-              width: "88%",
-              maxWidth: 320,
-              display: "grid",
-              gap: 8,
-              zIndex: 2,
-            }}
-          >
+          {hasTarget ? (
             <div
               style={{
-                display: "flex",
-                alignItems: "baseline",
-                justifyContent: "center",
-                gap: 8,
-                color: "#fff",
-                padding: "8px 12px",
-                borderRadius: 12,
-                letterSpacing: 0.4,
-                background: "rgba(0,0,0,0.4)",
+                position: "absolute",
+                top: 12,
+                left: "50%",
+                transform: "translateX(-50%)",
+                width: "92%",
+                maxWidth: 540,
+                padding: "8px 0",
+                zIndex: 3,
               }}
             >
-              <span style={{ fontSize: 80, fontWeight: 800 }}>{repCount}</span>
-              {targetReps && targetReps > 0 ? (
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#cbd5e1" }}>/ {targetReps}</span>
-              ) : null}
-            </div>
-            {progressPercent !== null ? (
               <div
                 style={{
                   width: "100%",
-                  background: "rgba(255, 255, 255, 0.28)",
-                  border: "1px solid rgba(255, 255, 255, 0.35)",
+                  background: "rgba(255, 255, 255, 0.18)",
                   borderRadius: 999,
                   overflow: "hidden",
                   height: 14,
-                  backdropFilter: "blur(2px)",
                 }}
               >
                 <div
                   style={{
                     height: "100%",
-                    width: `${progressPercent}%`,
-                    background: "linear-gradient(90deg, #22c55e, #16a34a)",
+                    width: `${progressValue}%`,
+                    background: "linear-gradient(90deg, #f97316, #ea580c)",
                     transition: "width 220ms ease",
                   }}
                 />
               </div>
+            </div>
+          ) : null}
+
+          <div
+            style={{
+              position: "absolute",
+              bottom: readyOverlayBottom,
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: "92%",
+              maxWidth: 400,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              padding: "12px 14px",
+              zIndex: 3,
+            }}
+          >
+            <span style={{ fontSize: 92, fontWeight: 800, color: "#fff", lineHeight: 1 }}>{repCount}</span>
+            {targetReps && targetReps > 0 ? (
+              <span style={{ fontSize: 18, fontWeight: 700, color: "#cbd5e1" }}>/ {targetReps}</span>
             ) : null}
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              exitSession();
+            }}
+            style={{
+              position: "absolute",
+              right: 14,
+              bottom: 14,
+              padding: "10px 14px",
+              borderRadius: 12,
+              border: "1px solid rgba(255,255,255,0.14)",
+              background: "rgba(0,0,0,0.6)",
+              color: "#e2e8f0",
+              fontWeight: 700,
+              cursor: "pointer",
+              zIndex: 4,
+              backdropFilter: "blur(6px)",
+            }}
+          >
+            Continue later
+          </button>
           {showCompletion ? (
             <div
               style={{

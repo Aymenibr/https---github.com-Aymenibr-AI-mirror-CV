@@ -67,7 +67,7 @@ export default function HomePage() {
             Start Squat Session
           </Link>
           <Link
-            href="/pushup?reps=15"
+            href="/press?reps=10"
             style={{
               padding: "14px 20px",
               borderRadius: 12,
@@ -78,7 +78,7 @@ export default function HomePage() {
               border: "1px solid #cbd5e1",
             }}
           >
-            Try Push-ups
+            Train Shoulder Press
           </Link>
         </div>
 

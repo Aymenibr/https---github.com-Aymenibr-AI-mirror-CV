@@ -8,6 +8,7 @@ type Props = {
   onLandmarks?: (keypoints: number[][]) => void;
   exercise?: string;
   targetReps?: number | null;
+  enableBackend?: boolean;
 };
 
 type PoseLandmark = { x: number; y: number; z: number };
@@ -47,7 +48,13 @@ declare global {
   }
 }
 
-export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, targetReps }: Props) {
+export default function WebcamPose({
+  onFrameCaptured,
+  onLandmarks,
+  exercise,
+  targetReps,
+  enableBackend = true,
+}: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -72,17 +79,13 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
   const restInFlightRef = useRef<boolean>(false);
   const lastSendRef = useRef<number>(0);
   const sendIntervalMs = 100;
-  const backendBase = (() => {
-    const url = process.env.NEXT_PUBLIC_API_URL;
-    if (!url) {
-      throw new Error("NEXT_PUBLIC_API_URL is not defined");
-    }
-    return url;
-  })();
-
-  const normalizedBase = backendBase.replace(/\/$/, "");
-  const wsUrl = `${normalizedBase.replace(/^http:\/\//, "ws://").replace(/^https:\/\//, "wss://")}/ws/predict`;
-  const restUrl = `${normalizedBase}/predict`;
+  const backendBase =
+    enableBackend && process.env.NEXT_PUBLIC_API_URL ? process.env.NEXT_PUBLIC_API_URL : null;
+  const normalizedBase = backendBase ? backendBase.replace(/\/$/, "") : null;
+  const wsUrl = normalizedBase
+    ? `${normalizedBase.replace(/^http:\/\//, "ws://").replace(/^https:\/\//, "wss://")}/ws/predict`
+    : null;
+  const restUrl = normalizedBase ? `${normalizedBase}/predict` : null;
   const lastSentKeypointsRef = useRef<number[][] | null>(null);
   const motionThreshold = 0.003;
   const prevExerciseRef = useRef<string | undefined>(exercise);
@@ -101,15 +104,31 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
   const searchParams = useSearchParams();
   const STABILITY_FRAME_COUNT = 5;
   const STABILITY_THRESHOLD = 6;
-  const displayExercise = exercise || prediction.exercise;
-  const progressPercent =
-    targetReps && targetReps > 0 ? Math.min(100, Math.max(0, (repCount / targetReps) * 100)) : null;
+  const hasTarget = typeof targetReps === "number" && targetReps > 0;
+  const displayExercise = exercise || (enableBackend ? prediction.exercise : "");
+  const progressPercent = hasTarget ? Math.min(100, Math.max(0, (repCount / targetReps) * 100)) : null;
+  const exitSession = useCallback(() => {
+    try {
+      window.close();
+      setTimeout(() => {
+        window.location.href = "about:blank";
+      }, 100);
+    } catch {
+      window.location.href = "about:blank";
+    }
+  }, []);
 
   useEffect(() => {
     if (targetReps && targetReps > 0 && repCount >= targetReps) {
       setShowCompletion(true);
     }
   }, [repCount, targetReps]);
+
+  useEffect(() => {
+    if (showCompletion && hasTarget) {
+      exitSession();
+    }
+  }, [showCompletion, hasTarget, exitSession]);
 
   useEffect(() => {
     targetRepsRef.current = targetReps ?? null;
@@ -345,6 +364,7 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
   };
 
   const sendRestPrediction = async (keypoints: number[][], timestamp: number) => {
+    if (!enableBackend || !restUrl) return;
     if (restInFlightRef.current) return;
     restInFlightRef.current = true;
     try {
@@ -366,6 +386,7 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
   };
 
   const handleRetryWebsocket = () => {
+    if (!enableBackend) return;
     wsFailureCountRef.current = 0;
     setUseRestFallback(false);
     setLatencyMs(null);
@@ -410,33 +431,33 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
         const filteredLandmarks = formattedLandmarks
           ? REQUIRED_LANDMARK_INDICES.map((idx) => formattedLandmarks[idx])
           : null;
-        if (results.poseLandmarks) {
+        if (enableBackend && results.poseLandmarks) {
           const now = performance.now();
           if (now - lastSendRef.current >= sendIntervalMs) {
             if (filteredLandmarks && isValidLandmarks(filteredLandmarks)) {
               if (lastSentKeypointsRef.current === null) {
                 lastSentKeypointsRef.current = filteredLandmarks;
               } else if (hasSufficientMotion(filteredLandmarks, lastSentKeypointsRef.current)) {
-                  const timestamp = Date.now();
-                  if (useRestFallback) {
+                const timestamp = Date.now();
+                if (useRestFallback) {
+                  lastSentKeypointsRef.current = filteredLandmarks;
+                  lastSendRef.current = now;
+                  sendRestPrediction(filteredLandmarks, timestamp).catch(() => {});
+                } else if (socketRef.current && isSocketOpen) {
+                  try {
+                    socketRef.current.send(
+                      JSON.stringify({
+                        keypoints: filteredLandmarks,
+                        timestamp,
+                      })
+                    );
                     lastSentKeypointsRef.current = filteredLandmarks;
                     lastSendRef.current = now;
-                    sendRestPrediction(filteredLandmarks, timestamp).catch(() => {});
-                  } else if (socketRef.current && isSocketOpen) {
-                    try {
-                      socketRef.current.send(
-                        JSON.stringify({
-                          keypoints: filteredLandmarks,
-                          timestamp,
-                        })
-                      );
-                      lastSentKeypointsRef.current = filteredLandmarks;
-                      lastSendRef.current = now;
-                    } catch (err) {
-                      console.error("ws_send_error", err);
-                    }
+                  } catch (err) {
+                    console.error("ws_send_error", err);
                   }
                 }
+              }
             }
           }
         }
@@ -590,6 +611,9 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
     let reconnectDelayMs = 1000;
 
     const connect = () => {
+      if (!enableBackend || !wsUrl) {
+        return;
+      }
       if (useRestFallback) {
         return;
       }
@@ -645,7 +669,9 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
       }
     };
 
-    connect();
+    if (enableBackend && wsUrl) {
+      connect();
+    }
 
     return () => {
       if (socketRef.current) {
@@ -657,7 +683,10 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
         reconnectTimeoutRef.current = null;
       }
     };
-  }, [wsUrl, useRestFallback]);
+  }, [wsUrl, useRestFallback, enableBackend]);
+
+  const readyOverlayBottom = 28;
+  const progressValue = progressPercent ?? 0;
 
   return (
     <section
@@ -665,6 +694,7 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
         position: "relative",
         width: "100%",
         minHeight: "100vh",
+        background: "#0b1224",
       }}
     >
       {errorMessage ? (
@@ -674,6 +704,7 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
           style={{
             position: "relative",
             width: "100%",
+            minHeight: "100vh",
             height: "100vh",
             overflow: "hidden",
             display: "flex",
@@ -879,61 +910,82 @@ export default function WebcamPose({ onFrameCaptured, onLandmarks, exercise, tar
               {displayExercise}
             </div>
           ) : null}
-          {poseStatus === "ready" ? (
+          {hasTarget ? (
             <div
               style={{
                 position: "absolute",
-                bottom: 12,
+                top: 12,
                 left: "50%",
                 transform: "translateX(-50%)",
-                width: "88%",
-                maxWidth: 320,
-                display: "grid",
-                gap: 8,
-                zIndex: 2,
+                width: "92%",
+                maxWidth: 540,
+                padding: "8px 0",
+                zIndex: 3,
               }}
             >
               <div
                 style={{
-                  display: "flex",
-                  alignItems: "baseline",
-                  justifyContent: "center",
-                  gap: 8,
-                  color: "#fff",
-                  padding: "8px 12px",
-                  borderRadius: 12,
-                  letterSpacing: 0.4,
+                  width: "100%",
+                  background: "rgba(255, 255, 255, 0.18)",
+                  borderRadius: 999,
+                  overflow: "hidden",
+                  height: 14,
                 }}
               >
-                <span style={{ fontSize: 80, fontWeight: 800 }}>{repCount}</span>
-                {targetReps && targetReps > 0 ? (
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "#cbd5e1" }}>/ {targetReps}</span>
-                ) : null}
-              </div>
-              {progressPercent !== null ? (
                 <div
                   style={{
-                    width: "100%",
-                    background: "rgba(255, 255, 255, 0.28)",
-                    border: "1px solid rgba(255, 255, 255, 0.35)",
-                    borderRadius: 999,
-                    overflow: "hidden",
-                    height: 14,
-                    backdropFilter: "blur(2px)",
+                    height: "100%",
+                    width: `${progressValue}%`,
+                    background: "linear-gradient(90deg, #22c55e, #16a34a)",
+                    transition: "width 220ms ease",
                   }}
-                >
-                  <div
-                    style={{
-                      height: "100%",
-                      width: `${progressPercent}%`,
-                      background: "linear-gradient(90deg, #22c55e, #16a34a)",
-                      transition: "width 220ms ease",
-                    }}
-                  />
-                </div>
-              ) : null}
+                />
+              </div>
             </div>
           ) : null}
+          <div
+            style={{
+              position: "absolute",
+              bottom: readyOverlayBottom,
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: "92%",
+              maxWidth: 400,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              padding: "12px 14px",
+              zIndex: 3,
+            }}
+          >
+            <span style={{ fontSize: 92, fontWeight: 800, color: "#fff", lineHeight: 1 }}>{repCount}</span>
+            {targetReps && targetReps > 0 ? (
+              <span style={{ fontSize: 18, fontWeight: 700, color: "#cbd5e1" }}>/ {targetReps}</span>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              exitSession();
+            }}
+            style={{
+              position: "absolute",
+              right: 14,
+              bottom: 14,
+              padding: "10px 14px",
+              borderRadius: 12,
+              border: "1px solid rgba(255,255,255,0.14)",
+              background: "rgba(0,0,0,0.6)",
+              color: "#e2e8f0",
+              fontWeight: 700,
+              cursor: "pointer",
+              zIndex: 4,
+              backdropFilter: "blur(6px)",
+            }}
+          >
+            Continue later
+          </button>
         </div>
       )}
       <canvas ref={canvasRef} style={{ display: "none" }} />

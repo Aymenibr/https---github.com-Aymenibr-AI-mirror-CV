@@ -3,9 +3,9 @@
 import Script from "next/script";
 import { useSearchParams } from "next/navigation";
 
-import PressPose from "../components/PressPose";
+import WebcamPose from "../components/WebcamPose";
 
-export default function PressPageClient() {
+export default function SquatPageClient() {
   const searchParams = useSearchParams();
   const targetReps = (() => {
     const repsValue = searchParams.get("reps");
@@ -23,7 +23,7 @@ export default function PressPageClient() {
     >
       <Script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" strategy="beforeInteractive" />
       <Script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" strategy="beforeInteractive" />
-      <PressPose targetReps={targetReps} />
+      <WebcamPose exercise="squat" targetReps={targetReps} enableBackend={false} />
     </main>
   );
 }
