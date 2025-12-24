@@ -40,7 +40,7 @@ export async function sendExerciseCompletedToFlutter(payload: ExerciseCompletedP
     if (typeof repsDone !== "number" || !Number.isFinite(repsDone) || repsDone < 0) return null;
     const handler = (window as any).flutter_inappwebview;
     if (!handler || typeof handler.callHandler !== "function") return null;
-    console.info("flutter_bridge_payload", payload);
+    console.info("flutter_bridge_payload", JSON.stringify(payload));
     const response = await handler.callHandler("completeExercise", payload);
     if (response && typeof response === "object" && (response as any).type === "EXERCISE_ACK") {
       sentOnce = true;

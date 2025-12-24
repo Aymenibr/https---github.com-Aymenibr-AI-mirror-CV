@@ -302,7 +302,7 @@ export default function WebcamPose({
   useEffect(() => {
     if (showCompletion && !appNotifiedRef.current) {
       const payload = buildFlutterPayload("done", repCountRef.current);
-      console.info("flutter_bridge_payload", payload);
+      console.info("flutter_bridge_payload", JSON.stringify(payload));
       sendExerciseCompletedToFlutter(payload).catch(() => {});
       appNotifiedRef.current = true;
     }
@@ -774,7 +774,7 @@ export default function WebcamPose({
             type="button"
             onClick={() => {
               const payload = buildFlutterPayload("tobecontinued", repCountRef.current);
-              console.info("flutter_bridge_payload", payload);
+              console.info("flutter_bridge_payload", JSON.stringify(payload));
               sendExerciseCompletedToFlutter(payload)
                 .catch(() => {})
                 .finally(() => exitWebview());

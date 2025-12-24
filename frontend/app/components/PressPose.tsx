@@ -358,7 +358,7 @@ export default function PressPose({ targetReps }: Props) {
     return () => {
       if (repCountRef.current === 0) {
         const payload = buildFlutterPayload("no_performance", 0);
-        console.info("flutter_bridge_payload", payload);
+        console.info("flutter_bridge_payload", JSON.stringify(payload));
         sendExerciseCompletedToFlutter(payload).catch(() => {});
       }
     };
@@ -368,7 +368,7 @@ export default function PressPose({ targetReps }: Props) {
     if (showCompletion && !completionSentRef.current) {
       completionSentRef.current = true;
       const payload = buildFlutterPayload("done", repCountRef.current);
-      console.info("flutter_bridge_payload", payload);
+      console.info("flutter_bridge_payload", JSON.stringify(payload));
       sendExerciseCompletedToFlutter(payload).catch(() => {});
     }
   }, [showCompletion, buildFlutterPayload]);
@@ -511,7 +511,7 @@ export default function PressPose({ targetReps }: Props) {
             type="button"
             onClick={() => {
               const payload = buildFlutterPayload("tobecontinued", repCountRef.current);
-              console.info("flutter_bridge_payload", payload);
+              console.info("flutter_bridge_payload", JSON.stringify(payload));
               sendExerciseCompletedToFlutter(payload)
                 .catch(() => {})
                 .finally(() => exitWebview());
