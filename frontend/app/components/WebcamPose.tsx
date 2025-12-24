@@ -85,7 +85,7 @@ export default function WebcamPose({
   const hasTarget = typeof targetReps === "number" && targetReps > 0;
   const displayExercise = exercise || "";
   const progressPercent = hasTarget ? Math.min(100, Math.max(0, (repCount / targetReps) * 100)) : null;
-  const buildFlutterPayload = (exerciseStatus: "done" | "tobecontinued" | "no_performance", reps: number) => ({
+  const buildFlutterPayload = (exerciseStatus: "done" | "inprogress" | "no_performance", reps: number) => ({
     type: "EXERCISE_COMPLETED" as const,
     userId: getQueryParam("user-id", "no-ID"),
     slotId: getQueryParam("slot-id", "no-ID"),
@@ -772,7 +772,7 @@ export default function WebcamPose({
           <button
             type="button"
             onClick={() => {
-              const payload = buildFlutterPayload("tobecontinued", repCountRef.current);
+              const payload = buildFlutterPayload("inprogress", repCountRef.current);
               console.info("flutter_bridge_payload", JSON.stringify(payload));
               sendExerciseCompletedToFlutter(payload)
                 .catch(() => {})

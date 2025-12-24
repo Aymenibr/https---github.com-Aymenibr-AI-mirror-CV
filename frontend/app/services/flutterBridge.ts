@@ -22,7 +22,7 @@ export const getQueryParam = (key: string, fallback: string): string => {
   }
 };
 
-type ExerciseStatus = "done" | "tobecontinued" | "no_performance";
+type ExerciseStatus = "done" | "inprogress" | "no_performance";
 
 type ExerciseCompletedPayload = {
   type: "EXERCISE_COMPLETED";
@@ -41,7 +41,7 @@ export async function sendExerciseCompletedToFlutter(payload: ExerciseCompletedP
     if (type !== "EXERCISE_COMPLETED") return null;
     if (typeof userId !== "string" || userId.trim().length === 0) return null;
     if (typeof slotId !== "string" || slotId.trim().length === 0) return null;
-    if (exerciseStatus !== "done" && exerciseStatus !== "tobecontinued" && exerciseStatus !== "no_performance") {
+    if (exerciseStatus !== "done" && exerciseStatus !== "inprogress" && exerciseStatus !== "no_performance") {
       return null;
     }
     if (typeof repsDone !== "number" || !Number.isFinite(repsDone) || repsDone < 0) return null;
@@ -71,7 +71,7 @@ export async function sendExerciseCompletedToFlutter(payload: ExerciseCompletedP
 //   type: "EXERCISE_COMPLETED",
 //   userId: getQueryParam("user-id", "no-ID"),
 //   slotId: getQueryParam("slot-id", "no-ID"),
-//   exerciseStatus: "tobecontinued",
+//   exerciseStatus: "inprogress",
 //   repsDone: 5,
 // });
 // await sendExerciseCompletedToFlutter({

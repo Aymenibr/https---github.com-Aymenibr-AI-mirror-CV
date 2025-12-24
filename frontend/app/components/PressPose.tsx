@@ -107,7 +107,7 @@ export default function PressPose({ targetReps }: Props) {
   const progressValue = progressPercent ?? 0;
   const webviewExitRef = useRef<boolean>(false);
   const completionSentRef = useRef<boolean>(false);
-  const buildFlutterPayload = (exerciseStatus: "done" | "tobecontinued" | "no_performance", reps: number) => ({
+  const buildFlutterPayload = (exerciseStatus: "done" | "inprogress" | "no_performance", reps: number) => ({
     type: "EXERCISE_COMPLETED" as const,
     userId: getQueryParam("user-id", "no-ID"),
     slotId: getQueryParam("slot-id", "no-ID"),
@@ -509,7 +509,7 @@ export default function PressPose({ targetReps }: Props) {
           <button
             type="button"
             onClick={() => {
-              const payload = buildFlutterPayload("tobecontinued", repCountRef.current);
+              const payload = buildFlutterPayload("inprogress", repCountRef.current);
               console.info("flutter_bridge_payload", JSON.stringify(payload));
               sendExerciseCompletedToFlutter(payload)
                 .catch(() => {})
