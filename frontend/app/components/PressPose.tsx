@@ -109,8 +109,8 @@ export default function PressPose({ targetReps }: Props) {
   const completionSentRef = useRef<boolean>(false);
   const buildFlutterPayload = (exerciseStatus: "done" | "tobecontinued" | "no_performance", reps: number) => ({
     type: "EXERCISE_COMPLETED" as const,
-    userId: getQueryParam("id", "no-ID"),
-    exerciseId: getQueryParam("exercise_id", "no-ID"),
+    userId: getQueryParam("user-id", "no-ID"),
+    exerciseId: getQueryParam("slot-id", "no-ID"),
     exerciseStatus,
     repsDone: reps,
   });

@@ -62,22 +62,22 @@ export async function sendExerciseCompletedToFlutter(payload: ExerciseCompletedP
 // Example calls (ensure only one is used per session):
 // await sendExerciseCompletedToFlutter({
 //   type: "EXERCISE_COMPLETED",
-//   userId: getQueryParam("id", "no-ID"),
-//   exerciseId: getQueryParam("id", "no-ID"),
+//   userId: getQueryParam("user-id", "no-ID"),
+//   exerciseId: getQueryParam("slot-id", "no-ID"),
 //   exerciseStatus: "done",
 //   repsDone: 12,
 // });
 // await sendExerciseCompletedToFlutter({
 //   type: "EXERCISE_COMPLETED",
-//   userId: getQueryParam("id", "no-ID"),
-//   exerciseId: getQueryParam("id", "no-ID"),
+//   userId: getQueryParam("user-id", "no-ID"),
+//   exerciseId: getQueryParam("slot-id", "no-ID"),
 //   exerciseStatus: "tobecontinued",
 //   repsDone: 5,
 // });
 // await sendExerciseCompletedToFlutter({
 //   type: "EXERCISE_COMPLETED",
-//   userId: getQueryParam("id", "no-ID"),
-//   exerciseId: getQueryParam("id", "no-ID"),
+//   userId: getQueryParam("user-id", "no-ID"),
+//   exerciseId: getQueryParam("slot-id", "no-ID"),
 //   exerciseStatus: "no_performance",
 //   repsDone: 0,
 // });

@@ -87,8 +87,8 @@ export default function WebcamPose({
   const progressPercent = hasTarget ? Math.min(100, Math.max(0, (repCount / targetReps) * 100)) : null;
   const buildFlutterPayload = (exerciseStatus: "done" | "tobecontinued" | "no_performance", reps: number) => ({
     type: "EXERCISE_COMPLETED" as const,
-    userId: getQueryParam("id", "no-ID"),
-    exerciseId: getQueryParam("exercise_id", "no-ID"),
+    userId: getQueryParam("user-id", "no-ID"),
+    exerciseId: getQueryParam("slot-id", "no-ID"),
     exerciseStatus,
     repsDone: reps,
   });
