@@ -22,9 +22,9 @@ export const getQueryParam = (key: string, fallback: string): string => {
   }
 };
 
-type ExerciseStatus = "done" | "inprogress" | "no_performance";
+export type ExerciseStatus = "done" | "inprogress" | "no_performance";
 
-type ExerciseCompletedPayload = {
+export type ExerciseCompletedPayload = {
   type: "EXERCISE_COMPLETED";
   userId: string;
   slotId: string;
@@ -47,7 +47,7 @@ export async function sendExerciseCompletedToFlutter(payload: ExerciseCompletedP
     if (typeof repsDone !== "number" || !Number.isFinite(repsDone) || repsDone < 0) return null;
     const handler = (window as any).flutter_inappwebview;
     if (!handler || typeof handler.callHandler !== "function") return null;
-    const response = await handler.callHandler("completeExercise", payload);
+    const response = await handler.callHandler("myAppHandler", payload);
     if (response && typeof response === "object" && (response as any).type === "EXERCISE_ACK") {
       sentOnce = true;
       return response;

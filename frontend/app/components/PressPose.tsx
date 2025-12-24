@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { getQueryParam, sendExerciseCompletedToFlutter } from "../services/flutterBridge";
+import type { ExerciseCompletedPayload } from "../services/flutterBridge";
 
 type PoseLandmark = { x: number; y: number; z: number };
 type PoseResult = { poseLandmarks?: PoseLandmark[] };
@@ -107,15 +107,40 @@ export default function PressPose({ targetReps }: Props) {
   const progressValue = progressPercent ?? 0;
   const webviewExitRef = useRef<boolean>(false);
   const completionSentRef = useRef<boolean>(false);
-  const buildFlutterPayload = (exerciseStatus: "done" | "inprogress" | "no_performance", reps: number) => ({
-    type: "EXERCISE_COMPLETED" as const,
-    userId: getQueryParam("user-id", "no-ID"),
-    slotId: getQueryParam("slot-id", "no-ID"),
-    exerciseStatus,
-    repsDone: reps,
-  });
+  const getQueryParam = (key: string, fallback: string) => {
+    if (typeof window === "undefined") return fallback;
+    const params = new URLSearchParams(window.location.search);
+    const value = params.get(key);
+    if (!value) return fallback;
+    const trimmed = value.trim();
+    if (trimmed.length === 0) return fallback;
+    try {
+      return decodeURIComponent(trimmed);
+    } catch {
+      return trimmed;
+    }
+  };
   const exitWebview = () => {
     webviewExitRef.current = true;
+    window.close?.();
+  };
+  const sendCompletion = async (status: "done" | "inprogress") => {
+    if (completionSentRef.current) return;
+    completionSentRef.current = true;
+    try {
+      const { sendExerciseCompletedToFlutter } = await import("../services/flutterBridge");
+      const payload: ExerciseCompletedPayload = {
+        type: "EXERCISE_COMPLETED",
+        userId: getQueryParam("user-id", "No_ID"),
+        slotId: getQueryParam("slot-id", "No_ID"),
+        exerciseStatus: status,
+        repsDone: repCountRef.current,
+      };
+      console.info("flutter_bridge_payload", JSON.stringify(payload));
+      await sendExerciseCompletedToFlutter(payload);
+    } finally {
+      exitWebview();
+    }
   };
   const triggerTestComplete = () => {
     const target = targetReps ?? null;
@@ -126,7 +151,7 @@ export default function PressPose({ targetReps }: Props) {
   };
   const handleCompletionOk = () => {
     setShowCompletion(false);
-    exitWebview();
+    void sendCompletion("done");
   };
 
   useEffect(() => {
@@ -354,24 +379,6 @@ export default function PressPose({ targetReps }: Props) {
     };
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (repCountRef.current === 0) {
-        const payload = buildFlutterPayload("no_performance", 0);
-        sendExerciseCompletedToFlutter(payload).catch(() => {});
-      }
-    };
-  }, [buildFlutterPayload]);
-
-  useEffect(() => {
-    if (showCompletion && !completionSentRef.current) {
-      completionSentRef.current = true;
-      const payload = buildFlutterPayload("done", repCountRef.current);
-      console.info("flutter_bridge_payload", JSON.stringify(payload));
-      sendExerciseCompletedToFlutter(payload).catch(() => {});
-    }
-  }, [showCompletion, buildFlutterPayload]);
-
   return (
     <section
       style={{
@@ -509,11 +516,7 @@ export default function PressPose({ targetReps }: Props) {
           <button
             type="button"
             onClick={() => {
-              const payload = buildFlutterPayload("inprogress", repCountRef.current);
-              console.info("flutter_bridge_payload", JSON.stringify(payload));
-              sendExerciseCompletedToFlutter(payload)
-                .catch(() => {})
-                .finally(() => exitWebview());
+              void sendCompletion("inprogress");
             }}
             style={{
               position: "absolute",
