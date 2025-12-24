@@ -88,7 +88,7 @@ export default function WebcamPose({
   const buildFlutterPayload = (exerciseStatus: "done" | "tobecontinued" | "no_performance", reps: number) => ({
     type: "EXERCISE_COMPLETED" as const,
     userId: getQueryParam("user-id", "no-ID"),
-    exerciseId: getQueryParam("slot-id", "no-ID"),
+    slotId: getQueryParam("slot-id", "no-ID"),
     exerciseStatus,
     repsDone: reps,
   });

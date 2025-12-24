@@ -27,7 +27,7 @@ type ExerciseStatus = "done" | "tobecontinued" | "no_performance";
 type ExerciseCompletedPayload = {
   type: "EXERCISE_COMPLETED";
   userId: string;
-  exerciseId: string;
+  slotId: string;
   exerciseStatus: ExerciseStatus;
   repsDone: number;
 };
@@ -37,10 +37,10 @@ export async function sendExerciseCompletedToFlutter(payload: ExerciseCompletedP
     if (sentOnce) return null;
     if (!flutterReady) return null;
     if (!payload || typeof payload !== "object") return null;
-    const { type, userId, exerciseId, exerciseStatus, repsDone } = payload;
+    const { type, userId, slotId, exerciseStatus, repsDone } = payload;
     if (type !== "EXERCISE_COMPLETED") return null;
     if (typeof userId !== "string" || userId.trim().length === 0) return null;
-    if (typeof exerciseId !== "string" || exerciseId.trim().length === 0) return null;
+    if (typeof slotId !== "string" || slotId.trim().length === 0) return null;
     if (exerciseStatus !== "done" && exerciseStatus !== "tobecontinued" && exerciseStatus !== "no_performance") {
       return null;
     }
@@ -63,21 +63,21 @@ export async function sendExerciseCompletedToFlutter(payload: ExerciseCompletedP
 // await sendExerciseCompletedToFlutter({
 //   type: "EXERCISE_COMPLETED",
 //   userId: getQueryParam("user-id", "no-ID"),
-//   exerciseId: getQueryParam("slot-id", "no-ID"),
+//   slotId: getQueryParam("slot-id", "no-ID"),
 //   exerciseStatus: "done",
 //   repsDone: 12,
 // });
 // await sendExerciseCompletedToFlutter({
 //   type: "EXERCISE_COMPLETED",
 //   userId: getQueryParam("user-id", "no-ID"),
-//   exerciseId: getQueryParam("slot-id", "no-ID"),
+//   slotId: getQueryParam("slot-id", "no-ID"),
 //   exerciseStatus: "tobecontinued",
 //   repsDone: 5,
 // });
 // await sendExerciseCompletedToFlutter({
 //   type: "EXERCISE_COMPLETED",
 //   userId: getQueryParam("user-id", "no-ID"),
-//   exerciseId: getQueryParam("slot-id", "no-ID"),
+//   slotId: getQueryParam("slot-id", "no-ID"),
 //   exerciseStatus: "no_performance",
 //   repsDone: 0,
 // });
