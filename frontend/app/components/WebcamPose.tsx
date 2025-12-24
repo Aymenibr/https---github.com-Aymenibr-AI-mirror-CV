@@ -93,16 +93,7 @@ export default function WebcamPose({
     repsDone: reps,
   });
   const exitWebview = () => {
-    if (webviewExitRef.current) return;
     webviewExitRef.current = true;
-    try {
-      window.close();
-      setTimeout(() => {
-        window.location.href = "about:blank";
-      }, 100);
-    } catch {
-      window.location.href = "about:blank";
-    }
   };
   const triggerTestComplete = () => {
     const target = targetRepsRef.current;
