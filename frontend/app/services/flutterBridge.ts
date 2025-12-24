@@ -12,7 +12,14 @@ export const getQueryParam = (key: string, fallback: string): string => {
   if (typeof window === "undefined") return fallback;
   const params = new URLSearchParams(window.location.search);
   const value = params.get(key);
-  return value && value.trim().length > 0 ? value : fallback;
+  if (!value) return fallback;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return fallback;
+  try {
+    return decodeURIComponent(trimmed);
+  } catch {
+    return trimmed;
+  }
 };
 
 type ExerciseStatus = "done" | "tobecontinued" | "no_performance";
@@ -40,7 +47,6 @@ export async function sendExerciseCompletedToFlutter(payload: ExerciseCompletedP
     if (typeof repsDone !== "number" || !Number.isFinite(repsDone) || repsDone < 0) return null;
     const handler = (window as any).flutter_inappwebview;
     if (!handler || typeof handler.callHandler !== "function") return null;
-    console.info("flutter_bridge_payload", JSON.stringify(payload));
     const response = await handler.callHandler("completeExercise", payload);
     if (response && typeof response === "object" && (response as any).type === "EXERCISE_ACK") {
       sentOnce = true;
@@ -56,22 +62,22 @@ export async function sendExerciseCompletedToFlutter(payload: ExerciseCompletedP
 // Example calls (ensure only one is used per session):
 // await sendExerciseCompletedToFlutter({
 //   type: "EXERCISE_COMPLETED",
-//   userId: getQueryParam("user_id", "No_ID"),
-//   exerciseId: getQueryParam("exercise_id", "No_ID"),
+//   userId: getQueryParam("id", "no-ID"),
+//   exerciseId: getQueryParam("id", "no-ID"),
 //   exerciseStatus: "done",
 //   repsDone: 12,
 // });
 // await sendExerciseCompletedToFlutter({
 //   type: "EXERCISE_COMPLETED",
-//   userId: getQueryParam("user_id", "No_ID"),
-//   exerciseId: getQueryParam("exercise_id", "No_ID"),
+//   userId: getQueryParam("id", "no-ID"),
+//   exerciseId: getQueryParam("id", "no-ID"),
 //   exerciseStatus: "tobecontinued",
 //   repsDone: 5,
 // });
 // await sendExerciseCompletedToFlutter({
 //   type: "EXERCISE_COMPLETED",
-//   userId: getQueryParam("user_id", "No_ID"),
-//   exerciseId: getQueryParam("exercise_id", "No_ID"),
+//   userId: getQueryParam("id", "no-ID"),
+//   exerciseId: getQueryParam("id", "no-ID"),
 //   exerciseStatus: "no_performance",
 //   repsDone: 0,
 // });

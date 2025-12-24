@@ -109,8 +109,8 @@ export default function PressPose({ targetReps }: Props) {
   const completionSentRef = useRef<boolean>(false);
   const buildFlutterPayload = (exerciseStatus: "done" | "tobecontinued" | "no_performance", reps: number) => ({
     type: "EXERCISE_COMPLETED" as const,
-    userId: getQueryParam("user_id", "No_ID"),
-    exerciseId: getQueryParam("exercise_id", "No_ID"),
+    userId: getQueryParam("id", "no-ID"),
+    exerciseId: getQueryParam("exercise_id", "no-ID"),
     exerciseStatus,
     repsDone: reps,
   });
@@ -358,7 +358,6 @@ export default function PressPose({ targetReps }: Props) {
     return () => {
       if (repCountRef.current === 0) {
         const payload = buildFlutterPayload("no_performance", 0);
-        console.info("flutter_bridge_payload", JSON.stringify(payload));
         sendExerciseCompletedToFlutter(payload).catch(() => {});
       }
     };
