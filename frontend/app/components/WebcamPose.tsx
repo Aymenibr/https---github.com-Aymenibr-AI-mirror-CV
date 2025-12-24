@@ -234,7 +234,6 @@ export default function WebcamPose({
       };
       hasReportedStatusRef.current = true;
       setSessionResponse(payload);
-      console.info("session_status", payload);
     },
     [displayExercise, exercise]
   );
@@ -267,7 +266,6 @@ export default function WebcamPose({
           exercise: latestExerciseRef.current,
           status: "not_done" as const,
         };
-        console.info("session_status", payload);
       }
     };
   }, []);
@@ -295,24 +293,25 @@ export default function WebcamPose({
     return () => {
       if (repCountRef.current === 0) {
         const payload = buildFlutterPayload("no_performance", 0);
+        console.info("flutter_bridge_payload", payload);
         sendExerciseCompletedToFlutter(payload).catch(() => {});
       }
     };
   }, [buildFlutterPayload]);
 
-  const handleCompletionOk = useCallback(() => {
-    const target = targetRepsRef.current;
-    const reachedTarget = target !== null && target > 0 && repCountRef.current >= target;
-    if (reachedTarget && poseStatus === "ready" && !appNotifiedRef.current) {
+  useEffect(() => {
+    if (showCompletion && !appNotifiedRef.current) {
       const payload = buildFlutterPayload("done", repCountRef.current);
-      sendExerciseCompletedToFlutter(payload)
-        .catch(() => {})
-        .finally(() => exitWebview());
+      console.info("flutter_bridge_payload", payload);
+      sendExerciseCompletedToFlutter(payload).catch(() => {});
       appNotifiedRef.current = true;
-      return;
     }
+  }, [showCompletion, buildFlutterPayload]);
+
+  const handleCompletionOk = useCallback(() => {
+    setShowCompletion(false);
     exitWebview();
-  }, [buildFlutterPayload, poseStatus]);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -774,7 +773,9 @@ export default function WebcamPose({
           <button
             type="button"
             onClick={() => {
-              sendExerciseCompletedToFlutter(buildFlutterPayload("tobecontinued", repCountRef.current))
+              const payload = buildFlutterPayload("tobecontinued", repCountRef.current);
+              console.info("flutter_bridge_payload", payload);
+              sendExerciseCompletedToFlutter(payload)
                 .catch(() => {})
                 .finally(() => exitWebview());
             }}
