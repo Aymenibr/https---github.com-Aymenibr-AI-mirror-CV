@@ -137,11 +137,19 @@ export default function PressPose({ targetReps }: Props) {
         repsDone: repCountRef.current,
       };
       console.info("flutter_bridge_payload", JSON.stringify(payload));
-      await sendExerciseCompletedToFlutter(payload);
-    } finally {
-      exitWebview();
-    }
-  };
+      try {
+        const hook = (window as any)?.flutter_bridge_payload;
+        if (typeof hook === "function") {
+          hook(payload);
+        }
+      } catch {
+        /* ignore */
+      }
+     await sendExerciseCompletedToFlutter(payload);
+   } finally {
+     exitWebview();
+   }
+ };
   const triggerTestComplete = () => {
     const target = targetReps ?? null;
     const nextReps = target && target > 0 ? target : repCountRef.current + 1;

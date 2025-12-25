@@ -308,10 +308,18 @@ export default function WebcamPose({
           type: "EXERCISE_COMPLETED",
           userId: getQueryParam("user-id", "No_ID"),
           slotId: getQueryParam("slot-id", "No_ID"),
-          exerciseStatus: status === "done" ? "done" : "inprogress",
+          exerciseStatus: status === "done" ? "done" : "tobecontinued",
           repsDone: repCountRef.current,
         };
         console.info("flutter_bridge_payload", JSON.stringify(payload));
+        try {
+          const hook = (window as any)?.flutter_bridge_payload;
+          if (typeof hook === "function") {
+            hook(payload);
+          }
+        } catch {
+          /* ignore */
+        }
         await sendExerciseCompletedToFlutter(payload);
       } finally {
         exitWebview();
