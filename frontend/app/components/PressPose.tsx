@@ -95,14 +95,14 @@ export default function PressPose({ targetReps }: Props) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const angleHistoryRef = useRef<number[]>([]);
 
-  const STABILITY_FRAMES = 2;
-  const STABILITY_DELTA = 20;
-  const bottomElbowMax = 125; // elbow angle threshold for the bottom (bent) position
-  const bottomElbowMin = 60;
-  const topElbowMin = 165; // elbow angle threshold for the top (locked-out) position
-  const minOverheadLift = 0.14; // wrists must rise above shoulders by this delta for top
-  const shoulderBand = 0.14; // wrist vertical tolerance around shoulder height for the bottom
-  const horizontalAlignTolerance = 0.35; // wrists should stay roughly above shoulders (not in front)
+  const STABILITY_FRAMES = 1;
+  const STABILITY_DELTA = 30;
+  const bottomElbowMax = 140; // easier: allow deeper bend
+  const bottomElbowMin = 50; // easier: allow more bend variation
+  const topElbowMin = 150; // easier: allow slightly less lockout
+  const minOverheadLift = 0.1; // easier: require less overhead lift
+  const shoulderBand = 0.2; // easier: larger vertical tolerance
+  const horizontalAlignTolerance = 0.45; // easier: wider lateral tolerance
   const hasTarget = typeof targetReps === "number" && targetReps > 0; // derived before hooks
   const progressPercent = hasTarget ? Math.min(100, Math.max(0, (repCount / targetReps) * 100)) : null;
   const readyOverlayBottom = 28;
