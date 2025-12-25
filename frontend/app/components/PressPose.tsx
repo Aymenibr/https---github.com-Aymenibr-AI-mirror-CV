@@ -165,6 +165,22 @@ export default function PressPose({ targetReps }: Props) {
   };
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const base = "https://cdn.jsdelivr.net/npm/@mediapipe/pose/";
+    const assets = [
+      "pose_solution_packed_assets.data",
+      "pose_solution_packed_assets_loader.js",
+      "pose_solution_simd_wasm_bin.wasm",
+      "pose_web.binarypb",
+      "pose_web_wasm.bin",
+      "pose_webgpu.binarypb",
+    ];
+    assets.forEach((file) => {
+      fetch(`${base}${file}`, { cache: "force-cache" }).catch(() => {});
+    });
+  }, []);
+
+  useEffect(() => {
     let isMounted = true;
 
     const init = async () => {
