@@ -24,8 +24,10 @@ export const getQueryParam = (key: string, fallback: string): string => {
 
 export type ExerciseStatus = "done" | "inprogress" | "no_performance";
 
+export type ExercisePayloadType = "EXERCISE_COMPLETED" | "EXERCISE_SKIPED";
+
 export type ExerciseCompletedPayload = {
-  type: "EXERCISE_COMPLETED";
+  type: ExercisePayloadType;
   userId: string;
   slotId: string;
   exerciseStatus: ExerciseStatus;
@@ -38,7 +40,7 @@ export async function sendExerciseCompletedToFlutter(payload: ExerciseCompletedP
     if (!flutterReady) return null;
     if (!payload || typeof payload !== "object") return null;
     const { type, userId, slotId, exerciseStatus, repsDone } = payload;
-    if (type !== "EXERCISE_COMPLETED") return null;
+    if (type !== "EXERCISE_COMPLETED" && type !== "EXERCISE_SKIPED") return null;
     if (typeof userId !== "string" || userId.trim().length === 0) return null;
     if (typeof slotId !== "string" || slotId.trim().length === 0) return null;
     if (exerciseStatus !== "done" && exerciseStatus !== "inprogress" && exerciseStatus !== "no_performance") {

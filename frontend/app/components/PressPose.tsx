@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { ExerciseCompletedPayload } from "../services/flutterBridge";
+import type { ExerciseCompletedPayload, ExerciseStatus } from "../services/flutterBridge";
 
 type PoseLandmark = { x: number; y: number; z: number };
 type PoseResult = { poseLandmarks?: PoseLandmark[] };
@@ -124,13 +124,13 @@ export default function PressPose({ targetReps }: Props) {
     webviewExitRef.current = true;
     window.close?.();
   };
-  const sendCompletion = async (status: "done" | "inprogress") => {
+  const sendCompletion = async (status: ExerciseStatus) => {
     if (completionSentRef.current) return;
     completionSentRef.current = true;
     try {
       const { sendExerciseCompletedToFlutter } = await import("../services/flutterBridge");
       const payload: ExerciseCompletedPayload = {
-        type: "EXERCISE_COMPLETED",
+        type: status === "inprogress" ? "EXERCISE_SKIPED" : "EXERCISE_COMPLETED",
         userId: getQueryParam("user-id", "No_ID"),
         slotId: getQueryParam("slot-id", "No_ID"),
         exerciseStatus: status,
@@ -159,7 +159,7 @@ export default function PressPose({ targetReps }: Props) {
   };
   const handleCompletionOk = () => {
     setShowCompletion(false);
-    void sendCompletion("done");
+            void sendCompletion("done");
   };
 
   useEffect(() => {
@@ -536,13 +536,13 @@ export default function PressPose({ targetReps }: Props) {
               background: "rgba(0,0,0,0.6)",
               color: "#e2e8f0",
               fontWeight: 700,
-              cursor: "pointer",
-              zIndex: 4,
-              backdropFilter: "blur(6px)",
-            }}
-          >
-            Continue later
-          </button>
+          cursor: "pointer",
+          zIndex: 4,
+          backdropFilter: "blur(6px)",
+        }}
+      >
+        Continue later
+      </button>
           <button
             type="button"
             onClick={triggerTestComplete}

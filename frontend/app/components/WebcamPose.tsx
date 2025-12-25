@@ -309,7 +309,7 @@ export default function WebcamPose({
       try {
         const { sendExerciseCompletedToFlutter } = await import("../services/flutterBridge");
         const payload: ExerciseCompletedPayload = {
-          type: "EXERCISE_COMPLETED",
+          type: status === "inprogress" ? "EXERCISE_SKIPED" : "EXERCISE_COMPLETED",
           userId: getQueryParam("user-id", "No_ID"),
           slotId: getQueryParam("slot-id", "No_ID"),
           exerciseStatus: status,
