@@ -756,27 +756,6 @@ export default function WebcamPose({
             </div>
           </div>
         ) : null}
-          {displayExercise ? (
-            <div
-              style={{
-                position: "absolute",
-                top: 10,
-                left: "50%",
-                transform: "translateX(-50%)",
-                background: "rgba(0, 0, 0, 0.55)",
-                color: "#fff",
-                padding: "8px 14px",
-                borderRadius: 999,
-                fontSize: 14,
-                fontWeight: 700,
-                letterSpacing: 0.4,
-                zIndex: 2,
-                textTransform: "capitalize",
-              }}
-            >
-              {displayExercise}
-            </div>
-          ) : null}
           {hasTarget ? (
             <div
               style={{
