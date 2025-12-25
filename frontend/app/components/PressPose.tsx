@@ -88,6 +88,8 @@ export default function PressPose({ targetReps }: Props) {
   const [repCount, setRepCount] = useState<number>(0);
   const repStageRef = useRef<"down" | "up" | null>(null);
   const [showCompletion, setShowCompletion] = useState<boolean>(false);
+  const hasFirstResultRef = useRef<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const [poseStatus, setPoseStatus] = useState<"not_visible" | "ready">("not_visible");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -181,7 +183,7 @@ export default function PressPose({ targetReps }: Props) {
         locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`,
       });
       pose.setOptions({
-        modelComplexity: 1,
+        modelComplexity: 0,
         smoothLandmarks: true,
         enableSegmentation: false,
       });
@@ -190,6 +192,10 @@ export default function PressPose({ targetReps }: Props) {
         const vidW = videoRef.current?.videoWidth ?? 0;
         const vidH = videoRef.current?.videoHeight ?? 0;
         const landmarks = results.poseLandmarks;
+        if (!hasFirstResultRef.current) {
+          hasFirstResultRef.current = true;
+          setIsLoading(false);
+        }
 
         let status: "not_visible" | "ready" = "not_visible";
         if (isMostlyVisible(landmarks) && isTorsoUpright(landmarks)) {
@@ -352,6 +358,12 @@ export default function PressPose({ targetReps }: Props) {
         }
       });
       poseRef.current = pose;
+      const warmupCanvas = document.createElement("canvas");
+      warmupCanvas.width = 160;
+      warmupCanvas.height = 120;
+      const warmCtx = warmupCanvas.getContext("2d");
+      warmCtx?.fillRect(0, 0, warmupCanvas.width, warmupCanvas.height);
+      await pose.send({ image: warmupCanvas });
 
       const camera = new Camera(videoRef.current, {
         onFrame: async () => {
@@ -359,8 +371,8 @@ export default function PressPose({ targetReps }: Props) {
           if (!videoRef.current) return;
           await poseRef.current.send({ image: videoRef.current });
         },
-        width: 640,
-        height: 480,
+        width: 480,
+        height: 360,
       });
       cameraRef.current = camera;
       camera.start().catch((err: unknown) => {
@@ -465,6 +477,31 @@ export default function PressPose({ targetReps }: Props) {
               transform: "scaleX(-1)",
             }}
           />
+
+          {isLoading ? (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "rgba(0, 0, 0, 0.45)",
+                zIndex: 5,
+              }}
+            >
+              <div
+                style={{
+                  width: 64,
+                  height: 64,
+                  border: "6px solid rgba(255,255,255,0.2)",
+                  borderTop: "6px solid #22c55e",
+                  borderRadius: "50%",
+                  animation: "spin 1s linear infinite",
+                }}
+              />
+            </div>
+          ) : null}
 
           {hasTarget ? (
             <div
@@ -633,6 +670,9 @@ export default function PressPose({ targetReps }: Props) {
           ) : null}
         </div>
       )}
+      <style>
+        {`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}
+      </style>
     </section>
   );
 }

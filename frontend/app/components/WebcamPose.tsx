@@ -75,6 +75,8 @@ export default function WebcamPose({
     exercise: string;
     status: "done" | "not_done";
   } | null>(null);
+  const hasFirstResultRef = useRef<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const hasReportedStatusRef = useRef<boolean>(false);
   const latestExerciseRef = useRef<string>("");
   const appNotifiedRef = useRef<boolean>(false);
@@ -360,11 +362,15 @@ export default function WebcamPose({
         locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`,
       });
       pose.setOptions({
-        modelComplexity: 1,
+        modelComplexity: 0,
         smoothLandmarks: true,
         enableSegmentation: false,
       });
       pose.onResults((results: { poseLandmarks?: PoseLandmark[] }) => {
+        if (!hasFirstResultRef.current) {
+          hasFirstResultRef.current = true;
+          setIsLoading(false);
+        }
         const formattedLandmarks = formatLandmarks(results.poseLandmarks);
         if (formattedLandmarks && onLandmarks) {
           onLandmarks(formattedLandmarks);
@@ -467,6 +473,13 @@ export default function WebcamPose({
       });
       poseRef.current = pose;
 
+      const warmupCanvas = document.createElement("canvas");
+      warmupCanvas.width = 160;
+      warmupCanvas.height = 120;
+      const warmCtx = warmupCanvas.getContext("2d");
+      warmCtx?.fillRect(0, 0, warmupCanvas.width, warmupCanvas.height);
+      await pose.send({ image: warmupCanvas });
+
       const camera = new Camera(videoRef.current, {
         onFrame: async () => {
           if (!isMounted || !poseRef.current) return;
@@ -487,8 +500,8 @@ export default function WebcamPose({
           }
           await poseRef.current.send({ image: videoRef.current });
         },
-        width: 640,
-        height: 480,
+        width: 480,
+        height: 360,
       });
       cameraRef.current = camera;
       camera.start().catch((error: unknown) => {
@@ -599,6 +612,30 @@ export default function WebcamPose({
               transform: "scaleX(-1)",
             }}
           />
+          {isLoading ? (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "rgba(0, 0, 0, 0.45)",
+                zIndex: 5,
+              }}
+            >
+              <div
+                style={{
+                  width: 64,
+                  height: 64,
+                  border: "6px solid rgba(255,255,255,0.2)",
+                  borderTop: "6px solid #22c55e",
+                  borderRadius: "50%",
+                  animation: "spin 1s linear infinite",
+                }}
+              />
+            </div>
+          ) : null}
         {showCompletion ? (
           <div
             style={{
@@ -837,6 +874,9 @@ export default function WebcamPose({
         </div>
       )}
       <canvas ref={canvasRef} style={{ display: "none" }} />
+      <style>
+        {`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}
+      </style>
     </section>
   );
 }
