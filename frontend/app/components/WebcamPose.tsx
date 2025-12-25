@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import type { ExerciseCompletedPayload } from "../services/flutterBridge";
+import type { ExerciseCompletedPayload, ExerciseStatus } from "../services/flutterBridge";
 
 type Props = {
   onFrameCaptured?: (imageData: ImageData) => void;
@@ -299,7 +299,7 @@ export default function WebcamPose({
   };
 
   const sendCompletion = useCallback(
-    async (status: "done" | "inprogress") => {
+    async (status: ExerciseStatus) => {
       if (completionSentRef.current) return;
       completionSentRef.current = true;
       try {
@@ -308,7 +308,7 @@ export default function WebcamPose({
           type: "EXERCISE_COMPLETED",
           userId: getQueryParam("user-id", "No_ID"),
           slotId: getQueryParam("slot-id", "No_ID"),
-          exerciseStatus: status === "done" ? "done" : "tobecontinued",
+          exerciseStatus: status,
           repsDone: repCountRef.current,
         };
         console.info("flutter_bridge_payload", JSON.stringify(payload));
