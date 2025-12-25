@@ -278,7 +278,11 @@ export default function WebcamPose({
       if (!data || typeof data !== "object" || data.type !== "EXERCISE_ACK") {
         return;
       }
-      console.info("app_ack", data);
+      try {
+        console.info("app_ack", JSON.stringify(data));
+      } catch {
+        /* ignore */
+      }
     };
     window.addEventListener("message", handleAck);
     return () => window.removeEventListener("message", handleAck);
