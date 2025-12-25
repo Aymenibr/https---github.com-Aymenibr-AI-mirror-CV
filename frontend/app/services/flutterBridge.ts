@@ -47,10 +47,12 @@ export async function sendExerciseCompletedToFlutter(payload: ExerciseCompletedP
     if (typeof repsDone !== "number" || !Number.isFinite(repsDone) || repsDone < 0) return null;
     const handler = (window as any).flutter_inappwebview;
     if (!handler || typeof handler.callHandler !== "function") return null;
-    const response = await handler.callHandler("myAppHandler", payload);
-    if (response && typeof response === "object" && (response as any).type === "EXERCISE_ACK") {
+    const primary = await handler.callHandler("myAppHandler", payload);
+    const secondary = await handler.callHandler("completeExercise", payload).catch(() => null);
+    const ack = primary ?? secondary;
+    if (ack && typeof ack === "object" && (ack as any).type === "EXERCISE_ACK") {
       sentOnce = true;
-      return response;
+      return ack;
     }
     return null;
   } catch (err) {
