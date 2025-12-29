@@ -13,32 +13,7 @@ declare global {
   }
 }
 
-const POSE_CONNECTIONS: Array<[number, number]> = [
-  [11, 13],
-  [13, 15],
-  [12, 14],
-  [14, 16],
-  [11, 12],
-  [12, 24],
-  [24, 23],
-  [23, 11],
-  [24, 26],
-  [26, 28],
-  [23, 25],
-  [25, 27],
-  [28, 32],
-  [32, 30],
-  [27, 31],
-  [31, 29],
-  [16, 22],
-  [22, 18],
-  [15, 21],
-  [21, 17],
-  [16, 20],
-  [15, 19],
-  [16, 18],
-  [15, 17],
-];
+const POSE_CORE_INDICES = [0, 11, 12, 13, 14, 15, 16, 25, 26, 27, 28, 23, 24];
 
 const VISIBILITY_INDICES = [11, 12, 13, 14, 15, 16, 23, 24];
 
@@ -290,15 +265,63 @@ export default function PressPose({ targetReps }: Props) {
           const ctx = overlay.getContext("2d");
           if (ctx) {
             ctx.clearRect(0, 0, overlay.width, overlay.height);
-            ctx.strokeStyle = "#22c55e";
-            ctx.fillStyle = "#22c55e";
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = "#f8fafc";
+            ctx.lineWidth = 6;
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
             const toCanvas = (lm: PoseLandmark) => ({ x: lm.x * vidW, y: lm.y * vidH });
 
-            for (const [aIdx, bIdx] of POSE_CONNECTIONS) {
-              const a = landmarks[aIdx];
-              const b = landmarks[bIdx];
-              if (a && b) {
+            const hasCore = POSE_CORE_INDICES.every((idx) => landmarks[idx]);
+            if (hasCore) {
+              const head = landmarks[0];
+              const lShoulder = landmarks[11];
+              const rShoulder = landmarks[12];
+              const lElbow = landmarks[13];
+              const rElbow = landmarks[14];
+              const lWrist = landmarks[15];
+              const rWrist = landmarks[16];
+              const lHip = landmarks[23];
+              const rHip = landmarks[24];
+              const lKnee = landmarks[25];
+              const rKnee = landmarks[26];
+              const lAnkle = landmarks[27];
+              const rAnkle = landmarks[28];
+              const shoulderMid: PoseLandmark = {
+                x: (lShoulder.x + rShoulder.x) / 2,
+                y: (lShoulder.y + rShoulder.y) / 2,
+                z: (lShoulder.z + rShoulder.z) / 2,
+              };
+              const hipCenter: PoseLandmark = {
+                x: (lHip.x + rHip.x) / 2,
+                y: (lHip.y + rHip.y) / 2,
+                z: (lHip.z + rHip.z) / 2,
+              };
+              const torsoLen = Math.hypot(hipCenter.x - shoulderMid.x, hipCenter.y - shoulderMid.y);
+              const neck: PoseLandmark = {
+                x: shoulderMid.x,
+                y: Math.max(0, shoulderMid.y - torsoLen * 0.08),
+                z: shoulderMid.z,
+              };
+              const headTop: PoseLandmark = {
+                x: head.x,
+                y: Math.max(0, head.y - torsoLen * 0.35),
+                z: head.z,
+              };
+              const connections: Array<[PoseLandmark, PoseLandmark]> = [
+                [headTop, neck],
+                [neck, lShoulder],
+                [neck, rShoulder],
+                [neck, hipCenter],
+                [lShoulder, lElbow],
+                [lElbow, lWrist],
+                [rShoulder, rElbow],
+                [rElbow, rWrist],
+                [hipCenter, lKnee],
+                [lKnee, lAnkle],
+                [hipCenter, rKnee],
+                [rKnee, rAnkle],
+              ];
+              for (const [a, b] of connections) {
                 const { x: ax, y: ay } = toCanvas(a);
                 const { x: bx, y: by } = toCanvas(b);
                 ctx.beginPath();
@@ -306,12 +329,28 @@ export default function PressPose({ targetReps }: Props) {
                 ctx.lineTo(bx, by);
                 ctx.stroke();
               }
-            }
-            for (const lm of landmarks) {
-              const { x, y } = toCanvas(lm);
-              ctx.beginPath();
-              ctx.arc(x, y, 3, 0, Math.PI * 2);
-              ctx.fill();
+              ctx.fillStyle = "#ef4444";
+              const joints = [
+                headTop,
+                neck,
+                lShoulder,
+                rShoulder,
+                lElbow,
+                rElbow,
+                lWrist,
+                rWrist,
+                hipCenter,
+                lKnee,
+                rKnee,
+                lAnkle,
+                rAnkle,
+              ];
+              for (const joint of joints) {
+                const { x, y } = toCanvas(joint);
+                ctx.beginPath();
+                ctx.arc(x, y, 6, 0, Math.PI * 2);
+                ctx.fill();
+              }
             }
 
             // Elbow angle indicator overlay.
